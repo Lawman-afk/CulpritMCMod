@@ -35,22 +35,29 @@ public final class CulpritCommand {
                             .executes(c -> top(c, what, IntegerArgumentType.getInteger(c, "count")))));
         }
         dispatcher.register(Commands.literal("culprit")
-                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .requires(source -> dev.culprit.config.CulpritServerConfig.mayScan(source.permissions()))
                 .then(Commands.literal("scan").executes(c -> scan(c, DEFAULT_SECONDS))
-                        .then(Commands.argument("seconds", IntegerArgumentType.integer(5, 120))
+                        .then(Commands.argument("seconds", IntegerArgumentType.integer(5, 600))
                                 .executes(c -> scan(c, IntegerArgumentType.getInteger(c, "seconds")))))
                 .then(Commands.literal("stop").executes(CulpritCommand::stop))
                 .then(top));
     }
 
-    private static int scan(CommandContext<CommandSourceStack> c, int seconds) {
+    private static int scan(CommandContext<CommandSourceStack> c, int asked) {
         CommandSourceStack source = c.getSource();
+        int seconds = Math.min(asked, dev.culprit.config.CulpritServerConfig.maxSeconds());
         int left = TickScan.ticksLeft();
         if (left >= 0) {
             source.sendFailure(ReportText.tr("scan.busy", "A scan is already running (%s s left).", (left + 19) / 20));
             return 0;
         }
-        boolean started = TickScan.start(seconds * 20, report -> source.sendSuccess(() -> ReportText.summary(report), false));
+        net.minecraft.server.level.ServerPlayer player = source.getPlayer();
+        boolean started = TickScan.start(seconds * 20, report -> {
+            source.sendSuccess(() -> ReportText.summary(report), false);
+            if (player != null && !player.hasDisconnected()) {
+                dev.culprit.net.CulpritNetwork.sendReport(player, report);   // a player with the mod sees it on the world too
+            }
+        });
         if (!started) {
             source.sendFailure(ReportText.tr("scan.busy", "A scan is already running (%s s left).", seconds));
             return 0;

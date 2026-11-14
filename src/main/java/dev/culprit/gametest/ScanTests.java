@@ -36,7 +36,7 @@ final class ScanTests {
         // One lag source of each kind: a row of 16 hoppers (block entities), 12 pigs (entities), an observer clock
         // (scheduled block ticks) driving a piston (block events), and the plot's own chunk (chunk ticks). Then a long
         // scan stopped early.
-        CulpritGameTests.test("scan_finds_lag_sources", CulpritGameTests.FLOOR_16, 400, helper -> {
+        CulpritGameTests.testAlone("scan_finds_lag_sources", CulpritGameTests.FLOOR_16, 400, helper -> {
             for (int x = 0; x < 16; x++) {
                 helper.setBlock(x, 1, 2, Blocks.HOPPER);
             }
@@ -54,7 +54,7 @@ final class ScanTests {
 
         // The arithmetic of nested calls: a measured call inside another is charged its own time, and the outer one
         // only the rest (a vehicle and its passengers, a block entity setting off block events).
-        CulpritGameTests.test("probe_charges_own_time", CulpritGameTests.FLOOR_16, 200, helper -> whenNoScan(helper, () -> {
+        CulpritGameTests.testAlone("probe_charges_own_time", CulpritGameTests.FLOOR_16, 200, helper -> whenNoScan(helper, () -> {
             long outerStart = Probe.begin();
             spin(1_000_000);                       // 1 ms of the outer call's own work
             long innerStart = Probe.begin();
@@ -70,7 +70,7 @@ final class ScanTests {
 
         // A pig riding a minecart: the minecart is ticked from the level's loop, the pig inside the minecart's tick;
         // each must be in the report as its own thing, every tick.
-        CulpritGameTests.test("scan_charges_passengers_apart", CulpritGameTests.FLOOR_16, 300, helper -> {
+        CulpritGameTests.testAlone("scan_charges_passengers_apart", CulpritGameTests.FLOOR_16, 300, helper -> {
             Minecart cart = helper.spawn(EntityTypes.MINECART, 7, 1, 7);
             Pig pig = helper.spawn(EntityTypes.PIG, 7, 1, 7);
             helper.assertTrue(pig.startRiding(cart, true, false), "the pig gets into the minecart");
@@ -90,7 +90,7 @@ final class ScanTests {
 
         // The commands, as an operator would type them: scan starts a scan, stop ends it with a summary, top prints
         // its header and lines.
-        CulpritGameTests.test("commands_scan_stop_top", CulpritGameTests.FLOOR_16, 300, helper -> {
+        CulpritGameTests.testAlone("commands_scan_stop_top", CulpritGameTests.FLOOR_16, 300, helper -> {
             helper.setBlock(5, 1, 5, Blocks.HOPPER);
             whenNoScan(helper, () -> {
                 List<String> said = new ArrayList<>();

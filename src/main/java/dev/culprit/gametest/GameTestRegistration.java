@@ -39,7 +39,7 @@ final class GameTestRegistration {
     }
 
     private static void registerTests(RegisterGameTestsEvent event) {
-        Holder<TestEnvironmentDefinition<?>> environment = event.registerEnvironment(Culprit.id("default"));
+        java.util.Map<String, Holder<TestEnvironmentDefinition<?>>> environments = new java.util.HashMap<>();
         // -PonlyTests=<name>,<name>: only those tests are set up (a quicker run).
         String only = System.getProperty("culprit.onlyTests", "");
         List<String> chosen = only.isBlank() ? List.of() : java.util.Arrays.asList(only.split(","));
@@ -48,6 +48,8 @@ final class GameTestRegistration {
             if (!chosen.isEmpty() && !chosen.contains(spec.name())) {
                 continue;
             }
+            // One environment per batch: the runner runs each environment's tests as a batch, one batch after another.
+            Holder<TestEnvironmentDefinition<?>> environment = environments.computeIfAbsent(spec.batch(), b -> event.registerEnvironment(Culprit.id(b)));
             TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(environment, net.minecraft.world.level.Level.OVERWORLD,
                     spec.structure(), spec.maxTicks(), 0, true, net.minecraft.world.level.block.Rotation.NONE, false, 1, 1, spec.sky(), 0);
             event.registerTest(r.function().getId(), new FunctionGameTestInstance(r.function().key(), data));

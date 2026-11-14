@@ -122,6 +122,10 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
   ticks another) counted once, each to its own.
 - **Budgets**: idle cost too small to measure; under 5 % added to the tick while scanning 10,000 block entities; the
   overlay under 0.5 ms a frame for 2,000 boxes.
+- **Measured (2026-11-14)**, the idle cost: a plot of 1,792 hoppers and 200 pigs (about 2,000 hooked calls a tick),
+  1,200 ticks timed with no scan, twice with the hooks and twice without them (`-Pbench`, `-PnoHooks`): the tick's
+  median was 1.64 and 1.55 ms with them, 1.67 and 1.67 ms without. The hooks cost nothing the measurement can see; the
+  runs differ among themselves by more than any cost of theirs.
 
 ### 5.3 Frames on 26.3 (to prototype first)
 
@@ -170,3 +174,5 @@ cost nothing); ModernFix.
 | 2026-11-14 | Main NeoForge 26.3, ports NeoForge 1.21.1 and Forge 1.20.1, as Ground Burst; the project set up from Showpiece's build (dev runs, deploy task, GameTests); the folder, repository, instance ("Culprit26.3") and build key renamed for it. |
 | 2026-11-14 | First the tick scan with its commands and GameTests, then the results on the world and the screen, then the frame scan (26.3's attribution prototyped first), then the chunk inspector. |
 | 2026-11-14 | The tick scan built (as DESIGN §4.1 and §5.2, PLAYBOOK has how): `@WrapOperation` round block entity tickers, `@WrapMethod` on the server level's entity, passenger, scheduled tick, block event and chunk methods; per-thing slots in primitive arrays; nested calls taken out; the timer's cost taken off. Commands only for now; its GameTest finds hoppers, pigs, an observer clock, a piston and the plot's chunk at their places. |
+| 2026-11-14 | The results reach a player's client and the world (DESIGN §4.4, §5.4): three optional payloads (report, status, scan request; operators only); the overlay drawn after the level, as Ground Burst's effects are, so shader packs and Distant Horizons leave it alone (boxes in the plasma colour scale, labels over the costliest close ones, chunk tiles at the feet, the screen's pick marked by a beam); the Culprit screen on F7 (summary, things, types, mods, chunks, scan, stop, show or hide, teleport); the Lab world built by a dev-only run and photographed. |
+| 2026-11-14 | After the first pictures of the overlay: chunk outlines on the ground (not at the player's feet), labels kept apart as seen from the camera, the player's own box left out, cheap things fainter; the colour scale turned round so the costliest looks the most alarming (pale yellow, orange, red, magenta); the screen fitted to any window. Server settings: who may scan (operators by default) and the longest scan. The scanning tests each run alone (two scans raced in one batch). |

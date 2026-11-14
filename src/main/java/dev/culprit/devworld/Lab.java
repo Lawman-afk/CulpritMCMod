@@ -1,0 +1,365 @@
+package dev.culprit.devworld;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
+
+import dev.culprit.Culprit;
+import dev.culprit.client.ClientReport;
+import dev.culprit.client.CulpritScreen;
+import dev.culprit.client.Overlay;
+import dev.culprit.net.CulpritNetwork;
+import dev.culprit.net.ReportData;
+import dev.culprit.scan.Kind;
+import dev.culprit.scan.TickScan;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.FileUtil;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.HopperBlock;
+import net.minecraft.world.level.block.ObserverBlock;
+import net.minecraft.world.level.block.StandingSignBlock;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SignText;
+import net.minecraft.world.level.block.entity.SignTextSlot;
+import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.level.levelgen.FlatLevelSource;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.WorldDimensions;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
+import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+
+/**
+ * Development aid, left out of the released jar (build.gradle's jar task; found by its annotation, so nothing in the
+ * jar names it): the world the user tests in (DESIGN §7). With {@code -Dculprit.lab=true} (the {@code lab} Gradle
+ * run) the client makes a flat creative world, "Culprit Lab" (run/saves/culprit_lab), builds lag sources of each kind
+ * round the spawn with a sign at each saying what it is, scans the server for ten seconds, photographs the results on
+ * the world and in the Culprit screen (run/screenshots/lab_*.png), and quits, the world saved to copy into the test
+ * instance's saves. Daylight, no weather, no mob spawning.
+ */
+@EventBusSubscriber(value = Dist.CLIENT, modid = Culprit.MODID)
+public final class Lab {
+    private static final boolean ENABLED = Boolean.getBoolean("culprit.lab");
+    /** Ticks for the world to come in and the machines to get going before the scan, and between pictures. */
+    private static final int SETTLE = 200, EACH = 40, SCAN_TICKS = 200;
+
+    /** A picture: its name, where it is taken from and which way it looks, and what is on screen. */
+    private record View(String name, Vec3 at, float yaw, float pitch, int screenTab, boolean mark) {}
+
+    private static boolean worldMade, built, scanned;
+    private static int waited, shot;
+    private static List<View> views = List.of();
+    private static Vec3 spawn = Vec3.ZERO;
+    private static int ground;
+
+    private Lab() {}
+
+    @SubscribeEvent
+    public static void tick(ClientTickEvent.Post event) {
+        if (!ENABLED) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        mc.options.pauseOnLostFocus = false;
+        if (mc.gui.screen() instanceof net.minecraft.client.gui.screens.PauseScreen) {
+            mc.gui.setScreen(null);
+        }
+        if (mc.options.tutorialStep != net.minecraft.client.tutorial.TutorialSteps.NONE) {
+            mc.getTutorial().setStep(net.minecraft.client.tutorial.TutorialSteps.NONE);
+        }
+        if (mc.level == null && !worldMade && mc.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen) {
+            worldMade = true;
+            try {
+                var settings = new LevelSettings("Culprit Lab", GameType.CREATIVE, LevelSettings.DifficultySettings.DEFAULT, true,
+                        WorldDataConfiguration.DEFAULT);
+                mc.createWorldOpenFlows().createFreshLevel(fresh(mc, "culprit_lab"), settings, new WorldOptions(0L, false, false), Lab::flat,
+                        mc.gui.screen());
+            } catch (IOException e) {
+                Culprit.LOGGER.error("Lab: could not make a world", e);
+            }
+            return;
+        }
+        MinecraftServer server = mc.getSingleplayerServer();
+        if (mc.level == null || mc.player == null || server == null) {
+            return;
+        }
+        mc.options.cloudStatus().set(net.minecraft.client.CloudStatus.OFF);
+        if (!built) {
+            built = true;
+            server.execute(() -> build(server.overworld()));
+            return;
+        }
+        waited++;
+        if (!scanned) {
+            if (waited == SETTLE) {
+                scanned = true;
+                server.execute(() -> {
+                    ServerPlayer player = server.getPlayerList().getPlayers().getFirst();
+                    TickScan.start(SCAN_TICKS, report -> CulpritNetwork.sendReport(player, report));
+                });
+                Culprit.LOGGER.info("Lab: scanning for {} ticks", SCAN_TICKS);
+            }
+            return;
+        }
+        ReportData report = ClientReport.data();
+        if (report == null) {
+            return;
+        }
+        if (!mc.gui.hud.isHidden()) {
+            mc.gui.hud.toggle();                                   // no hand, hotbar or chat in the pictures
+        }
+        // Each view: the camera and what is on screen, a wait for the frame to settle, the picture.
+        int t = ++shot;
+        if (t % EACH != 0) {
+            return;
+        }
+        int step = t / EACH;
+        if (step > 1 && step - 2 < views.size()) {
+            View v = views.get(step - 2);
+            Screenshot.grab(mc.gameDirectory, "lab_" + v.name() + ".png", mc.gameRenderer.mainRenderTarget(), 1,
+                    msg -> Culprit.LOGGER.info("Lab: {}", msg.getString()));
+        }
+        if (step - 1 < views.size()) {
+            View v = views.get(step - 1);
+            if (v.mark()) {
+                Overlay.markThing(farthestCostly(report, mc));
+            }
+            if (v.screenTab() >= 0) {
+                CulpritScreen.showTab(v.screenTab());
+                if (!(mc.gui.screen() instanceof CulpritScreen)) {
+                    mc.gui.setScreen(new CulpritScreen());
+                }
+            } else if (mc.gui.screen() instanceof CulpritScreen) {
+                mc.gui.setScreen(null);
+            }
+            server.execute(() -> server.getPlayerList().getPlayers().getFirst()
+                    .teleportTo(server.overworld(), v.at().x, v.at().y, v.at().z, Set.of(), v.yaw(), v.pitch(), true));
+            return;
+        }
+        if (step - 1 == views.size()) {
+            mc.gui.setScreen(null);
+            server.execute(() -> server.getPlayerList().getPlayers().getFirst()
+                    .teleportTo(server.overworld(), spawn.x, spawn.y, spawn.z, Set.of(), 180f, 10f, true));
+            return;
+        }
+        if (step - 1 > views.size() + 1) {
+            Culprit.LOGGER.info("Lab built");
+            mc.stop();
+        }
+    }
+
+    /** The costliest thing at least 12 blocks from the spawn, to mark for the picture of a marked thing. */
+    private static int farthestCostly(ReportData r, Minecraft mc) {
+        for (int i = 0; i < r.things; i++) {
+            if (r.kind[i] != Kind.CHUNK && BlockPos.of(r.pos[i]).distToCenterSqr(spawn) > 12 * 12) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * On the server: the rules; round the spawn, lag sources of each kind with a sign at each: hopper chains fed
+     * from chests (block entities), a room of villagers and a pen of cows (entities), dropped items (entities), an
+     * observer clock driving a row of pistons (scheduled block ticks, block events); then the views to take.
+     */
+    private static void build(ServerLevel level) {
+        var commands = level.getServer().getCommands();
+        var source = level.getServer().createCommandSourceStack().withSuppressedOutput();
+        for (String c : List.of("time set 6000", "gamerule advance_time false", "gamerule advance_weather false", "weather clear",
+                "gamerule spawn_mobs false", "difficulty peaceful", "kill @e[type=!player]")) {
+            commands.performPrefixedCommand(source, c);
+        }
+        for (int cx = -3; cx <= 3; cx++) {
+            for (int cz = -3; cz <= 3; cz++) {
+                level.getChunk(cx, cz);
+            }
+        }
+        ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING, 0, 0);
+        int y = ground;
+
+        // Hopper chains: six columns, a full chest on top feeding five hoppers down into a chest on the ground.
+        for (int i = 0; i < 6; i++) {
+            int x = -13 + i * 2;
+            level.setBlock(new BlockPos(x, y, 8), Blocks.CHEST.defaultBlockState(), 3);
+            for (int h = 1; h <= 5; h++) {
+                level.setBlock(new BlockPos(x, y + h, 8), Blocks.HOPPER.defaultBlockState().setValue(HopperBlock.FACING, Direction.DOWN), 3);
+            }
+            BlockPos top = new BlockPos(x, y + 6, 8);
+            level.setBlock(top, Blocks.CHEST.defaultBlockState(), 3);
+            if (level.getBlockEntity(top) instanceof Container chest) {
+                for (int s = 0; s < chest.getContainerSize(); s++) {
+                    chest.setItem(s, new ItemStack(Items.COBBLESTONE, 64));
+                }
+            }
+        }
+        sign(level, new BlockPos(-8, y, 5), List.of("Hopper chains", "(block entities):", "chests empty into", "chests below"));
+
+        // A row of 40 idle hoppers beside them: each ticks every tick even with nothing to move.
+        for (int x = -13; x <= -4; x++) {
+            for (int h = 0; h < 4; h++) {
+                level.setBlock(new BlockPos(x, y + h, 11), Blocks.HOPPER.defaultBlockState(), 3);
+            }
+        }
+
+        // A glass room of villagers (their brains are among the costliest entities).
+        box(level, 5, y, 6, 12, y + 3, 13);
+        for (int i = 0; i < 24; i++) {
+            var villager = EntityTypes.VILLAGER.create(level, EntitySpawnReason.COMMAND);
+            if (villager != null) {
+                villager.snapTo(6.5 + (i % 6), y, 7.5 + (i / 6) * 1.5, 0f, 0f);
+                villager.setPersistenceRequired();
+                level.addFreshEntity(villager);
+            }
+        }
+        sign(level, new BlockPos(8, y, 5), List.of("Villagers", "(entities):", "24 in a room", ""));
+
+        // A pen of cows.
+        for (int x = -14; x <= -3; x++) {
+            for (int z = -15; z <= -6; z++) {
+                if (x == -14 || x == -3 || z == -15 || z == -6) {
+                    level.setBlock(new BlockPos(x, y, z), Blocks.OAK_FENCE.defaultBlockState(), 3);
+                }
+            }
+        }
+        for (int i = 0; i < 40; i++) {
+            var cow = EntityTypes.COW.create(level, EntitySpawnReason.COMMAND);
+            if (cow != null) {
+                cow.snapTo(-12.5 + (i % 8) * 1.2, y, -13.5 + (i / 8) * 1.4, i * 37f, 0f);
+                cow.setPersistenceRequired();
+                level.addFreshEntity(cow);
+            }
+        }
+        sign(level, new BlockPos(-8, y, -5), List.of("Cows", "(entities):", "40 in a pen", ""));
+
+        // Dropped items, of many kinds so they do not merge.
+        Item[] kinds = {Items.DIRT, Items.STONE, Items.SAND, Items.GRAVEL, Items.OAK_LOG, Items.STICK, Items.APPLE, Items.BONE, Items.STRING,
+                Items.FEATHER, Items.WHEAT_SEEDS, Items.IRON_NUGGET, Items.GOLD_NUGGET, Items.REDSTONE, Items.COAL, Items.FLINT, Items.CLAY_BALL,
+                Items.SNOWBALL, Items.EGG, Items.LEATHER};
+        for (int i = 0; i < 160; i++) {
+            ItemEntity item = new ItemEntity(level, 6.2 + (i % 16) * 0.42, y + 0.2, -14.0 + (i / 16) * 0.8, new ItemStack(kinds[i % kinds.length]));
+            item.setDeltaMovement(Vec3.ZERO);
+            item.setUnlimitedLifetime();
+            level.addFreshEntity(item);
+        }
+        sign(level, new BlockPos(9, y, -5), List.of("Dropped items", "(entities):", "160 lying about", ""));
+
+        // An observer clock driving eight pistons through redstone dust on top of them. The pistons hang a block up,
+        // facing down, so their tops stay whole when they push (dust on an extended piston's open side would drop).
+        for (int x = -8; x <= -1; x++) {
+            level.setBlock(new BlockPos(x, y + 1, -1), Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.DOWN), 3);
+            level.setBlock(new BlockPos(x, y + 2, -1), Blocks.REDSTONE_WIRE.defaultBlockState(), 3);
+        }
+        level.setBlock(new BlockPos(0, y + 2, -1), Blocks.OBSERVER.defaultBlockState().setValue(ObserverBlock.FACING, Direction.EAST), 3);
+        level.setBlock(new BlockPos(1, y + 2, -1), Blocks.OBSERVER.defaultBlockState().setValue(ObserverBlock.FACING, Direction.WEST), 3);
+        sign(level, new BlockPos(-4, y, 1), List.of("Observer clock", "and pistons:", "block ticks and", "block events"));
+
+        // The spawn, with what to do.
+        sign(level, new BlockPos(0, y, 3), List.of("Culprit Lab", "Press F7: the", "Culprit screen.", "Scan 10 s, then look"));
+        sign(level, new BlockPos(2, y, 3), List.of("Or type", "/culprit scan", "then /culprit", "top things"));
+        commands.performPrefixedCommand(source, "setworldspawn 1 " + y + " 2");
+        spawn = new Vec3(1.5, y, 2.5);
+        ServerPlayer player = level.getServer().getPlayerList().getPlayers().getFirst();
+        player.setGameMode(GameType.CREATIVE);
+        player.getAbilities().flying = true;                       // (else the camera falls between the views)
+        player.onUpdateAbilities();
+        player.teleportTo(level, spawn.x, spawn.y, spawn.z, Set.of(), 180f, 10f, true);
+
+        List<View> list = new ArrayList<>();
+        list.add(eye("overview", 0.5, y + 16.0, -24.0, 0f, 32f, -1, false));
+        list.add(eye("hoppers", -8.5, y + 3.2, 2.0, 0f, 8f, -1, false));
+        list.add(eye("villagers", 8.5, y + 4.6, 1.5, 0f, 30f, -1, false));
+        list.add(eye("cows_items", -1.0, y + 7.0, -2.0, 180f, 40f, -1, false));
+        list.add(eye("pistons", -3.5, y + 2.6, -5.5, 0f, 18f, -1, false));
+        list.add(eye("marked", -14.0, y + 3.0, -2.0, -135f, 12f, -1, true));
+        list.add(eye("screen_things", 1.5, y + 1.6, 2.5, 180f, 10f, 0, false));
+        list.add(eye("screen_types", 1.5, y + 1.6, 2.5, 180f, 10f, 1, false));
+        list.add(eye("screen_mods", 1.5, y + 1.6, 2.5, 180f, 10f, 2, false));
+        list.add(eye("screen_chunks", 1.5, y + 1.6, 2.5, 180f, 10f, 3, false));
+        views = list;
+        Culprit.LOGGER.info("Lab: lag sources set out round the spawn at y {}", y);
+    }
+
+    /** A view from an eye at (x, eyeY, z): the player's feet put 1.62 below it. */
+    private static View eye(String name, double x, double eyeY, double z, float yaw, float pitch, int screenTab, boolean mark) {
+        return new View(name, new Vec3(x, eyeY - 1.62, z), yaw, pitch, screenTab, mark);
+    }
+
+    /** A glass room with a floor of stone: walls and roof of glass. */
+    private static void box(ServerLevel level, int x0, int y0, int z0, int x1, int y1, int z1) {
+        for (BlockPos p : BlockPos.betweenClosed(x0, y0, z0, x1, y1, z1)) {
+            boolean wall = p.getX() == x0 || p.getX() == x1 || p.getZ() == z0 || p.getZ() == z1 || p.getY() == y1;
+            level.setBlock(p, wall ? Blocks.GLASS.defaultBlockState() : Blocks.AIR.defaultBlockState(), 3);
+        }
+    }
+
+    /** A standing oak sign facing south (toward the spawn's side), four lines on its front. */
+    private static void sign(ServerLevel level, BlockPos at, List<String> lines) {
+        level.setBlock(at, Blocks.OAK_SIGN.defaultBlockState().setValue(StandingSignBlock.ROTATION, 0), 3);
+        if (level.getBlockEntity(at) instanceof SignBlockEntity sign) {
+            SignText.Mutable text = sign.getText(SignTextSlot.FRONT).asMutable();
+            for (int i = 0; i < Math.min(4, lines.size()); i++) {
+                text.setLine(i, Component.literal(lines.get(i)));
+            }
+            sign.setText(text.asImmutable(), SignTextSlot.FRONT);
+            sign.setChanged();
+            level.sendBlockUpdated(at, sign.getBlockState(), sign.getBlockState(), 3);
+        }
+    }
+
+    /** A flat world of grass over dirt and stone, a plains biome. */
+    private static WorldDimensions flat(HolderLookup.Provider registries) {
+        var biomes = registries.lookupOrThrow(Registries.BIOME);
+        var settings = FlatLevelGeneratorSettings.getDefault(biomes, registries.lookupOrThrow(Registries.STRUCTURE_SET),
+                        registries.lookupOrThrow(Registries.PLACED_FEATURE))
+                .withBiomeAndLayers(List.of(new FlatLayerInfo(1, Blocks.BEDROCK), new FlatLayerInfo(20, Blocks.STONE),
+                        new FlatLayerInfo(3, Blocks.DIRT), new FlatLayerInfo(1, Blocks.GRASS_BLOCK)),
+                        java.util.Optional.empty(), biomes.getOrThrow(Biomes.PLAINS));
+        return WorldPresets.createTestWorldDimensions(registries).replaceOverworldGenerator(registries, new FlatLevelSource(settings));
+    }
+
+    /** Deletes the worlds earlier runs left under {@code name} and gives the folder for this run's. */
+    private static String fresh(Minecraft mc, String name) throws IOException {
+        Path saves = mc.getLevelSource().getBaseDir();
+        if (Files.isDirectory(saves)) {
+            try (var old = Files.list(saves)) {
+                for (Path dir : old.filter(p -> Files.isDirectory(p) && p.getFileName().toString().startsWith(name)).toList()) {
+                    try (var walk = Files.walk(dir)) {
+                        walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                    }
+                }
+            }
+        }
+        return FileUtil.findAvailableName(saves, name, "");
+    }
+}

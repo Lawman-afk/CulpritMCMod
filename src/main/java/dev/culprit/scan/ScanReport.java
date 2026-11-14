@@ -20,8 +20,11 @@ import net.minecraft.world.level.Level;
  * Times are nanoseconds summed over the scan: per tick is {@link #perTick}.
  */
 public final class ScanReport {
-    /** One measured thing; {@code pos} is a packed block position (a chunk's centre for chunk ticks). */
-    public record Thing(byte kind, ResourceKey<Level> level, long pos, String type, long totalNs, long maxNs, long calls) {
+    /**
+     * One measured thing; {@code pos} is a packed block position (a chunk's centre for chunk ticks); {@code entityId}
+     * the entity's network id while it is in the world (so a client can follow it), else -1.
+     */
+    public record Thing(byte kind, ResourceKey<Level> level, long pos, String type, long totalNs, long maxNs, long calls, int entityId) {
         public String mod() {
             return modOf(type);
         }
@@ -92,10 +95,12 @@ public final class ScanReport {
         List<Thing> things = new ArrayList<>(t.size);
         for (int s = 0; s < t.size; s++) {
             long pos = t.pos[s];
+            int entityId = -1;
             if (t.ref[s] instanceof Entity entity && !entity.isRemoved()) {
                 pos = entity.blockPosition().asLong();   // where it is now, not where it was first measured
+                entityId = entity.getId();
             }
-            things.add(new Thing(t.kind[s], t.levels.get(t.level[s]), pos, t.typeNames.get(t.type[s]), t.totalNs[s], t.maxNs[s], t.calls[s]));
+            things.add(new Thing(t.kind[s], t.levels.get(t.level[s]), pos, t.typeNames.get(t.type[s]), t.totalNs[s], t.maxNs[s], t.calls[s], entityId));
         }
         Comparator<Thing> costliest = Comparator.comparingLong(Thing::totalNs).reversed();
         things.sort(costliest);

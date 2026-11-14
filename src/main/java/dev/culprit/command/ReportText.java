@@ -46,7 +46,11 @@ public final class ReportText {
         return String.format(Locale.ROOT, "%.1f%%", nsPerTick / TICK_NS * 100.0);
     }
 
-    static Component summary(ScanReport r) {
+    public static Component summaryLine(ScanReport r) {
+        return summary(r);
+    }
+
+    public static Component summary(ScanReport r) {
         MutableComponent text = tr("report.summary", "Culprit scanned %s ticks. The server tick took %s on average and %s at worst (a tick has 50 ms).",
                 r.ticks, time(r.perTick(r.tickNsTotal)), time(r.tickNsMax));
         MutableComponent kinds = tr("report.measured", "Measured per tick: %s.", kindList(r));

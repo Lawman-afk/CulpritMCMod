@@ -22,8 +22,11 @@ public final class CulpritGameTests {
 
     private static final List<TestSpec> SPECS = new ArrayList<>();
 
-    /** A test: its name, the structure it runs in, its timeout, whether its plot has open sky, and what it does. */
-    public record TestSpec(String name, Identifier structure, int maxTicks, boolean sky, Consumer<GameTestHelper> body) {}
+    /**
+     * A test: its name, the structure it runs in, its timeout, whether its plot has open sky, its batch (tests in one
+     * batch run side by side; batches run one after another), and what it does.
+     */
+    public record TestSpec(String name, Identifier structure, int maxTicks, boolean sky, String batch, Consumer<GameTestHelper> body) {}
 
     static {
         test("harness_floor", FLOOR_16, 20, helper -> {
@@ -34,17 +37,23 @@ public final class CulpritGameTests {
         });
 
         ScanTests.register();
+        BenchTests.register();
     }
 
     private CulpritGameTests() {}
 
     static void test(String name, Identifier structure, int maxTicks, Consumer<GameTestHelper> body) {
-        SPECS.add(new TestSpec(name, structure, maxTicks, false, body));
+        SPECS.add(new TestSpec(name, structure, maxTicks, false, "default", body));
+    }
+
+    /** A test in a batch of its own: run alone, as a test that scans must be (one scan at a time). */
+    static void testAlone(String name, Identifier structure, int maxTicks, Consumer<GameTestHelper> body) {
+        SPECS.add(new TestSpec(name, structure, maxTicks, false, name, body));
     }
 
     /** A test with open sky over its plot (no barrier lid), for things that reach above it. */
     static void testOpenSky(String name, Identifier structure, int maxTicks, Consumer<GameTestHelper> body) {
-        SPECS.add(new TestSpec(name, structure, maxTicks, true, body));
+        SPECS.add(new TestSpec(name, structure, maxTicks, true, "default", body));
     }
 
     /** Every test, in the order listed. */

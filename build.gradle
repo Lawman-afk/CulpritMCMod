@@ -85,6 +85,9 @@ neoForge {
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             // -PonlyTests=<name>,<name>: only those tests (GameTestRegistration).
             systemProperty 'culprit.onlyTests', (project.findProperty('onlyTests') ?: '').toString()
+            // -Pbench: the idle-cost benchmark (BenchTests); -PnoHooks: without the tick hooks, to compare.
+            systemProperty 'culprit.bench', providers.gradleProperty('bench').isPresent().toString()
+            systemProperty 'culprit.noHooks', providers.gradleProperty('noHooks').isPresent().toString()
         }
 
         data {
