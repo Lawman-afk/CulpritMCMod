@@ -38,6 +38,17 @@ public final class Names {
         return name;
     }
 
+    /** A mod's name as it calls itself, when this client has the mod (else its id). */
+    public static String mod(String id) {
+        String key = "mod|" + id;
+        String name = CACHE.get(key);
+        if (name == null) {
+            name = net.neoforged.fml.ModList.get().getModContainerById(id).map(c -> c.getModInfo().getDisplayName()).orElse(id);
+            CACHE.put(key, name);
+        }
+        return name;
+    }
+
     private static String find(String type, int kind) {
         if (type.equals("minecraft:chunk_upkeep")) {
             return capital(Component.translatableWithFallback("culprit.kind.one.chunk", "chunk upkeep").getString());

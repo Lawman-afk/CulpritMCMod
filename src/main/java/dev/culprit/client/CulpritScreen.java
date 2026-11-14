@@ -3,8 +3,11 @@ package dev.culprit.client;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 import org.jspecify.annotations.Nullable;
+
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 
 import dev.culprit.command.ReportText;
 import dev.culprit.net.ReportData;
@@ -14,7 +17,10 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -25,8 +31,9 @@ import net.minecraft.world.level.levelgen.Heightmap;
 /**
  * The results screen (F9 by default; DESIGN §4.4): the last scan's whole tick as a bar, and its lists, costliest
  * first: the tick's parts, things, types, mods (with the game's own work beside them, so they add up to the tick) and
- * chunks. A click on a line marks it on the world; buttons for a new scan, showing or hiding the overlay, and
- * teleporting to the marked line. It fits itself to the window.
+ * chunks; a search box that narrows the list shown (Enter picks the first found). A click on a line marks it on the
+ * world; buttons for a new scan, showing the results on the world (off until asked for), and teleporting to the
+ * marked line. It fits itself to the window.
  */
 public final class CulpritScreen extends Screen {
     private static final int ROW = 11;
@@ -42,7 +49,8 @@ public final class CulpritScreen extends Screen {
      * A line of the Tick or Mods list: a name, a count, its time summed over the scan, a note, whether it is the game's
      * own, its group's colour (or -1), and a place to mark (dim -1 for none) with the kind of thing there.
      */
-    private record Line(Component name, String count, long totalNs, Component note, boolean game, int group, int dim, long pos, int kind) {}
+    private record Line(Component name, String count, long totalNs, Component note, boolean game, int group, int dim, long pos, int kind,
+                        String key) {}
 
     private static int tab = TICK;
     private int scroll;
@@ -58,6 +66,13 @@ public final class CulpritScreen extends Screen {
     private @Nullable Button overlay, teleport;
     private @Nullable ReportData linesFor;
     private List<Line> tickLines = List.of(), modLines = List.of();
+    private @Nullable EditBox search;
+    private String query = "";
+    /** The current tab's lines the search finds (indices in its whole list), for the report, tab and words found for. */
+    private int @Nullable [] matches;
+    private @Nullable ReportData matchesFor;
+    private int matchesTab = -1;
+    private String matchesQuery = "";
 
     public CulpritScreen() {
         super(Component.translatableWithFallback("culprit.screen.title", "Culprit"));
@@ -104,6 +119,22 @@ public final class CulpritScreen extends Screen {
             tabButtons.add(addRenderableWidget(Button.builder(tabLabel(i), button -> showTab(index)).bounds(x, tabsY, tabW, 16).build()));
             x += tabW + 4;
         }
+        // The search box: after the tabs, or on a row of its own under them when the window is narrow.
+        int searchX = x, searchW = right - 8 - x, searchY = tabsY;
+        if (searchW < 80) {
+            searchX = left + 8;
+            searchW = inner;
+            searchY = tabsY + 20;
+            listTop += 20;
+        }
+        search = addRenderableWidget(new EditBox(this.font, searchX, searchY, searchW, 16, tr("search", "Search")));
+        search.setHint(tr("search.hint", "Search").withStyle(ChatFormatting.DARK_GRAY));
+        search.setMaxLength(64);
+        search.setValue(query);
+        search.setResponder(text -> {
+            query = text;
+            scroll = 0;
+        });
         Component[] labels = {tr("new_scan", "New scan (%s)", CulpritKeys.SCAN.getTranslatedKeyMessage()), overlayLabel(),
                 tr("teleport", "Teleport there"), tr("done", "Done")};
         int[] widths = new int[labels.length];
@@ -155,7 +186,7 @@ public final class CulpritScreen extends Screen {
     }
 
     private static Component overlayLabel() {
-        return Overlay.shown() ? tr("overlay.on", "On the world: shown") : tr("overlay.off", "On the world: hidden");
+        return Overlay.shown() ? tr("overlay.on", "Hide from the world") : tr("overlay.off", "Show on the world");
     }
 
     @Override
@@ -187,25 +218,25 @@ public final class CulpritScreen extends Screen {
         super.extractRenderState(g, mouseX, mouseY, partial);
         g.text(this.font, this.title.copy().withStyle(ChatFormatting.BOLD), left + 8, top + 6, HEAD);
         ReportData d = ClientReport.data();
+        if (d != null && linesFor != d) {
+            linesFor = d;
+            tickLines = tickLines(d);
+            modLines = modLines(d);
+            java.util.Arrays.fill(whereWidth, -1);
+            java.util.Arrays.fill(lastWidth, -1);
+        }
         Component status = statusLine(d);
         g.text(this.font, status, right - 8 - this.font.width(status), top + 6, DIM);
         int inner = right - left - 16;
         if (d == null) {
             int y = listTop + 6;
             for (FormattedCharSequence line : this.font.split(tr("empty",
-                    "No scan yet. Press %s to scan the server (operators): the results show here and on the world.",
+                    "No scan yet. Press %s to scan the server (operators); the results show here.",
                     CulpritKeys.SCAN.getTranslatedKeyMessage()), inner - 8)) {
                 g.text(this.font, line, left + 12, y, DIM);
                 y += 10;
             }
             return;
-        }
-        if (linesFor != d) {
-            linesFor = d;
-            tickLines = tickLines(d);
-            modLines = modLines(d);
-            java.util.Arrays.fill(whereWidth, -1);
-            java.util.Arrays.fill(lastWidth, -1);
         }
         int y = top + 18;
         for (FormattedCharSequence line : this.font.split(summary(d), inner)) {
@@ -223,6 +254,9 @@ public final class CulpritScreen extends Screen {
         int secondsLeft = ClientReport.secondsLeft();
         if (secondsLeft >= 0) {
             return tr("scanning", "Scanning the server: %s s left...", secondsLeft).withStyle(ChatFormatting.YELLOW);
+        }
+        if (d != null && !query.isBlank()) {
+            return tr("found", "%s of %s found", visible(d).length, rowCount(d));
         }
         if (d != null) {
             long ago = (System.currentTimeMillis() - ClientReport.receivedMillis()) / 1000;
@@ -297,7 +331,7 @@ public final class CulpritScreen extends Screen {
     private List<Line> tickLines(ReportData d) {
         List<Line> lines = new ArrayList<>();
         for (Breakdown.Part p : Breakdown.parts(d)) {
-            lines.add(new Line(p.name(), "", p.totalNs(), p.about(), true, p.group(), -1, 0, -1));
+            lines.add(new Line(p.name(), "", p.totalNs(), p.about(), true, p.group(), -1, 0, -1, ""));
         }
         return lines;
     }
@@ -309,9 +343,10 @@ public final class CulpritScreen extends Screen {
     private List<Line> modLines(ReportData d) {
         List<Line> lines = new ArrayList<>();
         for (int i = 0; i < d.mods; i++) {
-            lines.add(new Line(Component.literal(d.names[d.modName[i]]), String.valueOf(d.modCount[i]), d.modTotal[i],
+            String id = d.names[d.modName[i]];
+            lines.add(new Line(Component.literal(Names.mod(id)), String.valueOf(d.modCount[i]), d.modTotal[i],
                     Component.literal(place(d.dims[d.modWorstDim[i]], d.modWorstPos[i], d.modWorstKind[i], here())), false, -1,
-                    d.modWorstDim[i], d.modWorstPos[i], d.modWorstKind[i]));
+                    d.modWorstDim[i], d.modWorstPos[i], d.modWorstKind[i], id));
         }
         long game = 0;
         for (Breakdown.Part p : Breakdown.parts(d)) {
@@ -320,11 +355,11 @@ public final class CulpritScreen extends Screen {
             }
         }
         lines.add(new Line(tr("game_work", "The game's own work"), "", game, tr("game_work.about", "chunks, levels, connections: each in the Tick tab"),
-                true, -1, -1, 0, -1));
+                true, -1, -1, 0, -1, "minecraft"));
         lines.add(new Line(Component.translatableWithFallback("culprit.part.self", "Culprit's own timing"), "", d.selfNs,
-                Component.translatableWithFallback("culprit.part.about.self", "measuring every call, estimated"), true, -1, -1, 0, -1));
+                Component.translatableWithFallback("culprit.part.about.self", "measuring every call, estimated"), true, -1, -1, 0, -1, "culprit"));
         lines.add(new Line(Component.translatableWithFallback("culprit.part.rest", "Not measured"), "", d.unaccountedNs(),
-                Component.translatableWithFallback("culprit.part.about.rest", "tick events and work between the parts"), true, -1, -1, 0, -1));
+                Component.translatableWithFallback("culprit.part.about.rest", "tick events and work between the parts"), true, -1, -1, 0, -1, ""));
         lines.sort(Comparator.comparingLong(Line::totalNs).reversed());
         return lines;
     }
@@ -383,11 +418,15 @@ public final class CulpritScreen extends Screen {
         if (roomForLast) {
             g.text(this.font, lastHead, cLast, y, HEAD);
         }
-        int n = rowCount(d);
+        int[] found = visible(d);
+        int n = found.length;
         int rows = visibleRows();
         scroll = Math.clamp(scroll, 0, Math.max(0, n - rows));
+        if (n == 0 && !query.isBlank()) {
+            g.text(this.font, tr("none_found", "Nothing in this list matches \"%s\".", query), cName, listTop + ROW + 2, DIM);
+        }
         for (int r = 0; r < rows && scroll + r < n; r++) {
-            int i = scroll + r;
+            int i = found[scroll + r];
             int ry = listTop + ROW + 2 + r * ROW;
             boolean hover = mouseX >= x0 && mouseX < right - 8 && mouseY >= ry - 1 && mouseY < ry + ROW - 1;
             if (i == picked) {
@@ -455,6 +494,84 @@ public final class CulpritScreen extends Screen {
             g.fill(right - 8, barTop, right - 6, listBottom, 0x30FFFFFF);
             g.fill(right - 8, knobY, right - 6, knobY + knob, 0xA0FFFFFF);
         }
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        // Enter in the search box picks the first line found (marked, ready to teleport to).
+        if (search != null && search.isFocused() && event.isConfirmation()) {
+            ReportData d = ClientReport.data();
+            if (d != null) {
+                int[] found = visible(d);
+                if (found.length > 0) {
+                    pick(d, found[0]);
+                    scroll = 0;
+                }
+            }
+            return true;
+        }
+        return super.keyPressed(event);
+    }
+
+    @Override
+    public boolean charTyped(CharacterEvent event) {
+        // Typing anywhere searches: the box takes the first letter and keeps the rest (its hint stays seen until then).
+        if (search != null && !search.isFocused() && event.isAllowedChatCharacter() && !Character.isWhitespace(event.codepoint())) {
+            setFocused(search);
+            return search.charTyped(event);
+        }
+        return super.charTyped(event);
+    }
+
+    /** Fills the search box as a player would (the Lab's pictures). */
+    public void setSearch(String text) {
+        if (search != null) {
+            search.setValue(text);
+        }
+    }
+
+    /** The current tab's lines the search finds, by their index in the whole list; all of them with no search. */
+    private int[] visible(ReportData d) {
+        if (matches != null && matchesFor == d && matchesTab == tab && matchesQuery.equals(query)) {
+            return matches;
+        }
+        int n = rowCount(d);
+        String[] words = query.trim().toLowerCase(Locale.ROOT).split("\\s+");
+        IntArrayList out = new IntArrayList(n);
+        for (int i = 0; i < n; i++) {
+            if (query.isBlank() || allIn(searchText(d, i), words)) {
+                out.add(i);
+            }
+        }
+        matches = out.toIntArray();
+        matchesFor = d;
+        matchesTab = tab;
+        matchesQuery = query;
+        return matches;
+    }
+
+    private static boolean allIn(String text, String[] words) {
+        for (String word : words) {
+            if (!text.contains(word)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** What the search looks in for a line: its name as shown and its id, its kind, its place or chunk, its note. */
+    private String searchText(ReportData d, int i) {
+        String text = switch (tab) {
+            case TICK -> tickLines.get(i).name().getString() + " " + tickLines.get(i).note().getString();
+            case MODS -> modLines.get(i).name().getString() + " " + modLines.get(i).key() + " " + modLines.get(i).note().getString();
+            case TYPES -> Names.of(d.names[d.typeName[i]], d.typeKind[i]) + suffix(d.typeKind[i]) + " " + d.names[d.typeName[i]] + " "
+                    + Kind.english(d.typeKind[i]);
+            case CHUNKS -> "chunk " + d.chunkX[i] + ", " + d.chunkZ[i] + " " + d.dims[d.chunkDim[i]] + " "
+                    + Names.of(d.names[d.chunkTop[i]], d.chunkTopKind[i]) + " " + d.names[d.chunkTop[i]];
+            default -> Names.of(d.names[d.type[i]], d.kind[i]) + suffix(d.kind[i]) + " " + d.names[d.type[i]] + " " + Kind.english(d.kind[i]) + " "
+                    + place(d.dims[d.dim[i]], d.pos[i], d.kind[i], here());
+        };
+        return text.toLowerCase(Locale.ROOT);
     }
 
     /** The widest entry of the current tab's where column (or its last column) in this report, worked out once. */
@@ -564,9 +681,9 @@ public final class CulpritScreen extends Screen {
         ReportData d = ClientReport.data();
         if (d != null && event.button() == 0 && event.y() >= listTop + ROW && event.y() < listBottom && event.x() >= left + 6 && event.x() < right - 10) {
             int r = (int) ((event.y() - (listTop + ROW)) / ROW);
-            int i = scroll + r;
-            if (r < visibleRows() && i < rowCount(d)) {
-                pick(d, i);
+            int[] found = visible(d);
+            if (r < visibleRows() && scroll + r < found.length) {
+                pick(d, found[scroll + r]);
                 return true;
             }
         }

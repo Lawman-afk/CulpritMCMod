@@ -109,7 +109,7 @@ public final class ScanScreen extends Screen {
         g.text(this.font, this.title.copy().withStyle(ChatFormatting.BOLD), x, y, HEAD);
         y += 14;
         for (FormattedCharSequence line : this.font.split(tr("about",
-                "Times everything the server does while it runs, then shows where the tick went, here and on the world. Nothing in your world is changed."),
+                "Times everything the server does while it runs, then shows where the tick went. Nothing in your world is changed."),
                 W - 24)) {
             g.text(this.font, line, x, y, DIM);
             y += 10;

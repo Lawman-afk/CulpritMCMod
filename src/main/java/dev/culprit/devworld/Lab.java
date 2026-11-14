@@ -76,10 +76,10 @@ public final class Lab {
     /** Ticks for the world to come in and the machines to get going before the scan, and between pictures. */
     private static final int SETTLE = 200, EACH = 40, SCAN_TICKS = 200;
     /** What a view shows besides the world, when not a results tab (0 and up): nothing, the scan menu, the menu with a scan just started from it, the chat. */
-    private static final int NO_SCREEN = -1, SCAN_MENU = -2, SCAN_RUNNING = -3, CHAT = -4;
+    private static final int NO_SCREEN = -1, SCAN_MENU = -2, SCAN_RUNNING = -3, CHAT = -4, LOOK = -5;
 
     /** A picture: its name, where it is taken from and which way it looks, and what is on screen. */
-    private record View(String name, Vec3 at, float yaw, float pitch, int screenTab, boolean mark) {}
+    private record View(String name, Vec3 at, float yaw, float pitch, int screenTab, boolean mark, String search) {}
 
     private static boolean worldMade, built, scanned, hudWanted;
     private static int waited, shot;
@@ -157,11 +157,15 @@ public final class Lab {
             if (v.mark()) {
                 Overlay.markThing(farthestCostly(report, mc));
             }
-            hudWanted = v.screenTab() == CHAT;
+            hudWanted = v.screenTab() == CHAT || v.screenTab() == LOOK;    // the readout under the crosshair is on the HUD
+            Overlay.setShown(true);                                // as the results screen's button does
             if (v.screenTab() >= 0) {
                 CulpritScreen.showTab(v.screenTab());
                 if (!(mc.gui.screen() instanceof CulpritScreen)) {
                     mc.gui.setScreen(new CulpritScreen());
+                }
+                if (mc.gui.screen() instanceof CulpritScreen screen) {
+                    screen.setSearch(v.search());
                 }
             } else if (v.screenTab() == SCAN_MENU) {
                 mc.gui.setScreen(new ScanScreen());
@@ -313,11 +317,13 @@ public final class Lab {
         list.add(eye("cows_items", -1.0, y + 7.0, -2.0, 180f, 40f, NO_SCREEN, false));
         list.add(eye("pistons", -3.5, y + 2.6, -5.5, 0f, 18f, NO_SCREEN, false));
         list.add(eye("marked", -14.0, y + 3.0, -2.0, -135f, 12f, NO_SCREEN, true));
+        list.add(eye("looking", -8.5, y + 1.5, 4.5, 0f, 0f, LOOK, false));          // at the lowest hopper of a chain
         list.add(eye("screen_tick", 1.5, y + 1.6, 2.5, 180f, 10f, 0, false));
         list.add(eye("screen_things", 1.5, y + 1.6, 2.5, 180f, 10f, 1, false));
         list.add(eye("screen_types", 1.5, y + 1.6, 2.5, 180f, 10f, 2, false));
         list.add(eye("screen_mods", 1.5, y + 1.6, 2.5, 180f, 10f, 3, false));
         list.add(eye("screen_chunks", 1.5, y + 1.6, 2.5, 180f, 10f, 4, false));
+        list.add(new View("screen_search", new Vec3(1.5, y + 1.6 - 1.62, 2.5), 180f, 10f, 1, false, "hopper"));
         list.add(eye("scan_menu", 1.5, y + 1.6, 2.5, 180f, 10f, SCAN_MENU, false));
         list.add(eye("scan_running", 1.5, y + 1.6, 2.5, 180f, 10f, SCAN_RUNNING, false));
         list.add(eye("chat", 1.5, y + 1.6, 2.5, 180f, 10f, CHAT, false));
@@ -327,7 +333,7 @@ public final class Lab {
 
     /** A view from an eye at (x, eyeY, z): the player's feet put 1.62 below it. */
     private static View eye(String name, double x, double eyeY, double z, float yaw, float pitch, int screenTab, boolean mark) {
-        return new View(name, new Vec3(x, eyeY - 1.62, z), yaw, pitch, screenTab, mark);
+        return new View(name, new Vec3(x, eyeY - 1.62, z), yaw, pitch, screenTab, mark, "");
     }
 
     /** A glass room with a floor of stone: walls and roof of glass. */

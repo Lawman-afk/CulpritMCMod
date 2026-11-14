@@ -89,11 +89,17 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
   reads for colour-blind players; its cost as a label when close or looked at; each chunk's total as a tile on the
   ground; a beam over the worst few so they can be found from afar; through walls when chosen; hidden by a key, or
   after some minutes.
+- **Built (2026-11-14)**: off until the player shows it with the results screen's button; labels over the costliest
+  close things on screen that the camera sees, all one size on screen and drawn over the blocks round them (so a pane of glass or a
+  hopper above never cuts one short); the thing the crosshair rests on outlined in white and read out under the
+  crosshair (its name, cost a tick, share of the tick, worst tick, mod), or, on open ground, the outlined chunk's total
+  and what is mostly in it.
 - **The Culprit screen**: Ticks, Frames and Chunks tabs; lists sorted and grouped by thing, type, mod or chunk; search;
   a click marks the thing on the world with an arrow towards it; teleport for operators; copy a summary.
 - **Built for the tick scan (2026-11-14)**: the results screen (F9) opens on a Tick tab, a bar of the whole tick by part
   with every part listed, then Things, Types, Mods (the game's own work as "(the game)" lines, so the tab adds up to
-  the tick) and Chunks. Both keys can be changed in Controls.
+  the tick) and Chunks. Both keys can be changed in Controls. A search box narrows the list shown (names as shown and
+  ids, kinds, places, mods); typing anywhere starts it, Enter picks the first line found.
 - **Commands** for vanilla clients and server consoles: `/culprit scan`, `stop`, `top`, `chunks`, `export`; text
   results with click-to-teleport for operators.
 - **Export**: a report file (Markdown and JSON) in the game folder, for sharing with a pack's makers.
@@ -198,3 +204,5 @@ cost nothing); ModernFix.
 | 2026-11-14 | Keys, the user's idea ("f7 to open the start menu, f8 to read the last test result"; F7 is a popular lighting mod's, so keys must be changeable): F8 opens the scan menu, F9 the results, both changeable. F7 is Light Overlay's; F8 is free in Minecraft on every version (the smooth camera has no key); F9 and F10 are used only by small mods. The chat says when a scan starts and when it ends, with the quick results. |
 | 2026-11-14 | After the pictures of the new screens: a share is of the server's tick (the Tick and Mods tabs add up to 100 %), not of the 50 ms a tick may take (the summary gives that); things are named as the game names them in the player's language (Villager, Grass Block, Water), from the registries by kind; a place's block entities are one thing (a piston's moving block is a new block entity at every push: 536 "pistons" for 8); a whole chunk's things are placed as "chunk x, z" and teleported to on the ground; the Mods tab's own lines are one "The game's own work", Culprit's own timing and Not measured. |
 | 2026-11-14 | The GameTests (and their structures) are left out of the released jar and registered only in the dev runs: the user asked whether the test is part of the mod; it is the developer's check, and the scan only measures what is already in the world. A stop asked for inside a tick ends with that tick, so the parts always fit in the ticks. |
+| 2026-11-14 | The user's calls after trying the screens: the chat says only "Scanning the server for 10 seconds." and "Done. The server tick took ... Costliest: ...", capitalised, with no key hints; the world view is off until the results screen's button; a search box for each list; and the thing looked at is the one read out ("maybe making it so that it will focus on the one your looking at"), so labels are no longer the only way to see a cost; labels all one size on screen. |
+| 2026-11-14 | spark (spark.lucko.me, which the user's friend called a non-real-time version) researched: a sampling profiler with a web viewer (call tree, flame graph, by mod), a health report (TPS, MSPT, CPU, memory, disk, GC), a tick monitor that reports ticks over a threshold, `--only-ticks-over` to profile only lag spikes, heap summaries and dumps, and world statistics (entities by type, chunk and cluster). It finds which code is slow; Culprit finds which thing and where, live on the world: they work side by side. Ideas worth taking (lag spikes, a health line, mods' event time, entity counts in the chunk inspector, a local report to share) were put to the user before building any, as asked. |

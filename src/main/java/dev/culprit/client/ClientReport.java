@@ -67,23 +67,22 @@ public final class ClientReport {
         switch (s) {
             case CulpritNetwork.Status.STARTED -> {
                 scanSeconds = (ticks + 19) / 20;
-                say(tag().append(Component.translatableWithFallback("culprit.chat.started",
-                        "scanning the server for %s seconds. The results come when it ends (%s).", scanSeconds,
-                        CulpritKeys.RESULTS.getTranslatedKeyMessage()).withStyle(ChatFormatting.GRAY)));
+                say(tag().append(Component.translatableWithFallback("culprit.chat.started", "Scanning the server for %s seconds.", scanSeconds)
+                        .withStyle(ChatFormatting.GRAY)));
             }
             case CulpritNetwork.Status.BUSY -> {
                 scanSeconds = Math.max(scanSeconds, (ticks + 19) / 20);
-                say(tag().append(Component.translatableWithFallback("culprit.chat.busy", "a scan is already running (%s s left).",
+                say(tag().append(Component.translatableWithFallback("culprit.chat.busy", "A scan is already running (%s s left).",
                         (ticks + 19) / 20).withStyle(ChatFormatting.GRAY)));
             }
             case CulpritNetwork.Status.DENIED -> {
                 if (Minecraft.getInstance().gui.screen() == null) {
-                    say(tag().append(Component.translatableWithFallback("culprit.chat.denied", "only operators can scan this server.")
+                    say(tag().append(Component.translatableWithFallback("culprit.chat.denied", "Only operators can scan this server.")
                             .withStyle(ChatFormatting.RED)));
                 }
             }
             case CulpritNetwork.Status.STOPPED -> say(tag().append(Component.translatableWithFallback("culprit.chat.stopped",
-                    "scan stopped; the results so far are coming.").withStyle(ChatFormatting.GRAY)));
+                    "Scan stopped early.").withStyle(ChatFormatting.GRAY)));
             default -> {}
         }
         // The answer to "may I scan?" is kept as it is, without overwriting a scan's running state.
@@ -92,10 +91,10 @@ public final class ClientReport {
         }
     }
 
-    /** "[Culprit] done: the tick took ..., costliest: ... Press F9 for everything." */
+    /** "[Culprit] Done. The server tick took ... Costliest: ..." */
     private static Component finished(ReportData d) {
         MutableComponent line = tag().append(Component.translatableWithFallback("culprit.chat.done",
-                "done. The server tick took %s on average and %s at worst (it has 50 ms).",
+                "Done. The server tick took %s on average and %s at worst (it has 50 ms).",
                 Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal)))),
                 ReportText.time(d.tickNsMax)).withStyle(ChatFormatting.WHITE));
         if (d.types > 0) {
@@ -109,8 +108,6 @@ public final class ClientReport {
             }
             line.append(" ").append(Component.translatableWithFallback("culprit.chat.costliest", "Costliest: %s.", top).withStyle(ChatFormatting.WHITE));
         }
-        line.append(" ").append(Component.translatableWithFallback("culprit.chat.more", "Press %s for everything; it is marked on the world too.",
-                CulpritKeys.RESULTS.getTranslatedKeyMessage()).withStyle(ChatFormatting.GRAY));
         return line;
     }
 
@@ -154,5 +151,6 @@ public final class ClientReport {
         data = null;
         state = -1;
         Overlay.newReport(null);
+        Overlay.setShown(false);                               // hidden again in the next world, until asked for
     }
 }
