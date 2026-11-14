@@ -81,9 +81,9 @@ public final class Lab {
     private static final int NO_SCREEN = -1, SCAN_MENU = -2, SCAN_RUNNING = -3, CHAT = -4, LOOK = -5;
 
     /** A picture: its name, where it is taken from and which way it looks, and what is on screen. */
-    private record View(String name, Vec3 at, float yaw, float pitch, int screenTab, boolean mark, String search, boolean spikes) {}
+    private record View(String name, Vec3 at, float yaw, float pitch, int screenTab, boolean mark, String search, boolean spikes, boolean frames) {}
 
-    private static boolean worldMade, built, scanned, hudWanted;
+    private static boolean worldMade, built, scanned, hudWanted, framesScanned, framesChecked;
     private static int waited, shot;
     private static List<View> views = List.of();
     private static Vec3 spawn = Vec3.ZERO;
@@ -140,6 +140,25 @@ public final class Lab {
         if (report == null) {
             return;
         }
+        if (!framesScanned) {
+            framesScanned = true;
+            ClientReport.startFrameScan(6);                        // as the scan menu's Frames row does: over the first views
+        }
+        ReportData frames = ClientReport.framesData();
+        if (!framesChecked && frames != null) {
+            // The frame hooks are optional (one that misses its place must not stop a game): say here which parts were never
+            // timed, so a hook that missed is seen.
+            framesChecked = true;
+            StringBuilder never = new StringBuilder();
+            for (int p = 0; p < Math.min(dev.culprit.scan.FramePhase.COUNT, frames.phaseNs.length); p++) {
+                if (frames.phaseNs[p] == 0) {
+                    never.append(' ').append(dev.culprit.scan.FramePhase.key(p));
+                }
+            }
+            Culprit.LOGGER.info("Lab: frame scan: {} frames, {} ns a frame; entities {} ns, block entities {} ns; parts {}; never timed:{}",
+                    frames.ticks, frames.perTick(frames.tickNsTotal), frames.perTick(frames.kindNs[Kind.ENTITY]),
+                    frames.perTick(frames.kindNs[Kind.BLOCK_ENTITY]), java.util.Arrays.toString(frames.phaseNs), never.length() == 0 ? " none" : never);
+        }
         if (mc.gui.hud.isHidden() == hudWanted) {
             mc.gui.hud.toggle();                                   // no hand, hotbar or chat in the pictures, but the chat's
         }
@@ -161,6 +180,9 @@ public final class Lab {
             }
             hudWanted = v.screenTab() == CHAT || v.screenTab() == LOOK;    // the readout under the crosshair is on the HUD
             Overlay.setShown(true);                                // as the results screen's button does
+            if (ClientReport.framesShown() != v.frames()) {
+                ClientReport.showFrames(v.frames());               // as the results screen's Server ticks / Frames does
+            }
             if (ClientReport.spikesShown() != v.spikes()) {
                 ClientReport.showSpikes(v.spikes());               // as the results screen's Average / Lag spikes switch does
             }
@@ -348,10 +370,15 @@ public final class Lab {
         list.add(eye("screen_types", 1.5, y + 1.6, 2.5, 180f, 10f, 2, false));
         list.add(eye("screen_mods", 1.5, y + 1.6, 2.5, 180f, 10f, 3, false));
         list.add(eye("screen_chunks", 1.5, y + 1.6, 2.5, 180f, 10f, 4, false));
-        list.add(new View("screen_search", new Vec3(1.5, y + 1.6 - 1.62, 2.5), 180f, 10f, 1, false, "hopper", false));
-        list.add(new View("screen_spikes", new Vec3(1.5, y + 1.6 - 1.62, 2.5), 180f, 10f, 0, false, "", true));
-        list.add(new View("screen_spikes_things", new Vec3(1.5, y + 1.6 - 1.62, 2.5), 180f, 10f, 1, false, "", true));
-        list.add(new View("overview_spikes", new Vec3(0.5, y + 16.0 - 1.62, -24.0), 0f, 32f, NO_SCREEN, false, "", true));
+        Vec3 screenAt = new Vec3(1.5, y + 1.6 - 1.62, 2.5), overviewAt = new Vec3(0.5, y + 16.0 - 1.62, -24.0);
+        list.add(new View("screen_search", screenAt, 180f, 10f, 1, false, "hopper", false, false));
+        list.add(new View("screen_spikes", screenAt, 180f, 10f, 0, false, "", true, false));
+        list.add(new View("screen_spikes_things", screenAt, 180f, 10f, 1, false, "", true, false));
+        list.add(new View("overview_spikes", overviewAt, 0f, 32f, NO_SCREEN, false, "", true, false));
+        list.add(new View("frames_frame", screenAt, 180f, 10f, 0, false, "", false, true));
+        list.add(new View("frames_things", screenAt, 180f, 10f, 1, false, "", false, true));
+        list.add(new View("frames_types", screenAt, 180f, 10f, 2, false, "", false, true));
+        list.add(new View("frames_overview", overviewAt, 0f, 32f, NO_SCREEN, false, "", false, true));
         list.add(eye("scan_menu", 1.5, y + 1.6, 2.5, 180f, 10f, SCAN_MENU, false));
         list.add(eye("scan_running", 1.5, y + 1.6, 2.5, 180f, 10f, SCAN_RUNNING, false));
         list.add(eye("chat", 1.5, y + 1.6, 2.5, 180f, 10f, CHAT, false));
@@ -361,7 +388,7 @@ public final class Lab {
 
     /** A view from an eye at (x, eyeY, z): the player's feet put 1.62 below it. */
     private static View eye(String name, double x, double eyeY, double z, float yaw, float pitch, int screenTab, boolean mark) {
-        return new View(name, new Vec3(x, eyeY - 1.62, z), yaw, pitch, screenTab, mark, "", false);
+        return new View(name, new Vec3(x, eyeY - 1.62, z), yaw, pitch, screenTab, mark, "", false, false);
     }
 
     /** A glass room with a floor of stone: walls and roof of glass. */

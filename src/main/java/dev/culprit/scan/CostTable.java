@@ -14,7 +14,6 @@ import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import org.jspecify.annotations.Nullable;
 
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
 /**
@@ -45,8 +44,8 @@ final class CostTable {
     /** Per level, per kind known by position: position (or chunk) to slot. */
     private final List<Long2IntOpenHashMap[]> byPos = new ArrayList<>();
     final List<ResourceKey<Level>> levels = new ArrayList<>();
-    private final Map<ServerLevel, Integer> levelIndex = new IdentityHashMap<>();
-    private ServerLevel lastLevel;
+    private final Map<Level, Integer> levelIndex = new IdentityHashMap<>();
+    private Level lastLevel;
     private int lastLevelIndex;
     final List<String> typeNames = new ArrayList<>();
     private final Object2IntOpenHashMap<String> typeIds = new Object2IntOpenHashMap<>();
@@ -54,10 +53,10 @@ final class CostTable {
     private final Reference2IntOpenHashMap<Object> typeOfObject = new Reference2IntOpenHashMap<>();
 
     /** The tick's phases: their own time, summed over the scan, and how many times they were timed. */
-    final long[] phaseNs = new long[Phase.COUNT];
+    final long[] phaseNs;
     long phaseCalls;
     /** This tick's phases' own time and its measured calls, folded into the totals (and a kept tick) as it ends. */
-    final long[] phaseTickNs = new long[Phase.COUNT];
+    final long[] phaseTickNs;
     long tickCalls;
     /** Every tick's time, in order (the scan's usual tick is their median). */
     final LongArrayList tickTimes = new LongArrayList();
@@ -71,8 +70,12 @@ final class CostTable {
         int size;
         int[] slots = new int[64];
         long[] ns = new long[64];
-        final long[] phases = new long[Phase.COUNT];
+        final long[] phases;
         long calls;
+
+        TickRecord(int phaseCount) {
+            phases = new long[phaseCount];
+        }
     }
 
     private final IntArrayList touched = new IntArrayList();
@@ -80,12 +83,17 @@ final class CostTable {
     private int tick = 1;
 
     CostTable() {
-        this(0);
+        this(0, Phase.COUNT);
     }
 
-    /** A table keeping its {@code keep} slowest ticks whole (none for 0). */
-    CostTable(int keep) {
+    /**
+     * A table keeping its {@code keep} slowest ticks (or frames) whole (none for 0), with {@code phases} parts of the
+     * tick ({@link Phase}) or frame ({@link FramePhase}).
+     */
+    CostTable(int keep, int phases) {
         this.keep = keep;
+        this.phaseNs = new long[phases];
+        this.phaseTickNs = new long[phases];
         byRef.defaultReturnValue(-1);
         typeIds.defaultReturnValue(-1);
         typeOfObject.defaultReturnValue(-1);
@@ -113,7 +121,7 @@ final class CostTable {
         return sum;
     }
 
-    int levelIndex(ServerLevel level) {
+    int levelIndex(Level level) {
         if (level == lastLevel) {
             return lastLevelIndex;
         }
@@ -239,7 +247,7 @@ final class CostTable {
             }
             tickNs[s] = 0;
         }
-        for (int p = 0; p < Phase.COUNT; p++) {
+        for (int p = 0; p < phaseNs.length; p++) {
             phaseNs[p] += phaseTickNs[p];
             if (record != null) {
                 record.phases[p] = phaseTickNs[p];
@@ -254,7 +262,7 @@ final class CostTable {
     /** Where to keep a tick that took {@code tickTime}: a new record while there is room, else the fastest kept one's if it was slower; null if not. */
     private @Nullable TickRecord recordFor(long tickTime) {
         if (kept.size() < keep) {
-            TickRecord record = new TickRecord();
+            TickRecord record = new TickRecord(phaseNs.length);
             kept.add(record);
             return record;
         }

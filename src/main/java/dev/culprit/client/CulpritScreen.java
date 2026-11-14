@@ -11,6 +11,7 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
 
 import dev.culprit.command.ReportText;
 import dev.culprit.net.ReportData;
+import dev.culprit.scan.FrameScan;
 import dev.culprit.scan.Kind;
 import dev.culprit.scan.Phase;
 import net.minecraft.ChatFormatting;
@@ -58,11 +59,11 @@ public final class CulpritScreen extends Screen {
     private int picked = -1;
     private int left, top, right, bottom, listTop, listBottom;
     /** The header's layout for this window and report: the summary's lines, the bar, the key's entries and rows (init). */
-    private int summaryLines = 2, barY, searchLeft;
+    private int summaryLines = 2, barY, searchLeft, sectionRight;
     /** The bar of the tick's height: its key is written inside it. */
     private static final int BAR_H = 11;
     private @Nullable ReportData layoutData;
-    private boolean layoutSpikes;
+    private boolean layoutSpikes, layoutFrames;
     /** Each tab's widest entry in its where and last columns for the report shown, or -1 until worked out. */
     private final int[] whereWidth = {-1, -1, -1, -1, -1}, lastWidth = {-1, -1, -1, -1, -1};
     private final List<Button> tabButtons = new ArrayList<>();
@@ -101,8 +102,9 @@ public final class CulpritScreen extends Screen {
         // The header follows the window, the report and the view (a new one lays it out again): the title row with the
         // search box at its right, the summary's lines, the bar of the tick with its key inside, then the tabs and the
         // Average / Lag spikes switch.
-        layoutData = ClientReport.data();
+        layoutData = ClientReport.base();
         layoutSpikes = ClientReport.spikesShown();
+        layoutFrames = ClientReport.framesShown();
         ReportData d = ClientReport.view();
         summaryLines = Math.clamp(this.font.split(headline(layoutData, d), inner).size(), 1, 3);
         barY = top + 20 + summaryLines * 10 + 2;
@@ -122,9 +124,24 @@ public final class CulpritScreen extends Screen {
             ClientReport.showSpikes(!ClientReport.spikesShown());
             scroll = 0;
             picked = -1;
-        }).bounds(x, tabsY, viewW, 16).tooltip(Tooltip.create(tr("view.about",
-                "Average: every tick of the scan. Lag spikes: only the ticks that took over twice the usual tick (and at least 5 ms), to find what makes them slow."))).build());
-        int searchW = Math.clamp(inner / 3, 80, 160);
+        }).bounds(x, tabsY, viewW, 16).tooltip(Tooltip.create(layoutFrames
+                ? tr("view.about_frames", "Average: every frame of the scan. Stutters: only the frames that took over twice the usual frame (and at least 20 ms), to find what makes them slow.")
+                : tr("view.about", "Average: every tick of the scan. Lag spikes: only the ticks that took over twice the usual tick (and at least 5 ms), to find what makes them slow."))).build());
+        // Server ticks / Frames, after the title.
+        int sx = left + 8 + this.font.width(this.title.copy().withStyle(ChatFormatting.BOLD)) + 8;
+        for (int s = 0; s < 2; s++) {
+            boolean frames = s == 1;
+            Component label = sectionLabel(frames);
+            int w = this.font.width(label) + 10;
+            addRenderableWidget(Button.builder(label, b -> {
+                ClientReport.showFrames(frames);
+                scroll = 0;
+                picked = -1;
+            }).bounds(sx, top + 3, w, 14).build());
+            sx += w + 3;
+        }
+        sectionRight = sx;
+        int searchW = Math.clamp(inner / 4, 80, 160);
         searchLeft = right - 8 - searchW;
         search = addRenderableWidget(new EditBox(this.font, searchLeft, top + 3, searchW, 14, tr("search", "Search")));
         search.setHint(tr("search.hint", "Search").withStyle(ChatFormatting.DARK_GRAY));
@@ -174,7 +191,7 @@ public final class CulpritScreen extends Screen {
     }
 
     private Component tabLabel(int i) {
-        MutableComponent name = tr("tab." + TABS[i], TAB_NAMES[i]);
+        MutableComponent name = i == 0 && ClientReport.framesShown() ? tr("tab.frame", "Frame") : tr("tab." + TABS[i], TAB_NAMES[i]);
         return i == tab ? name.withStyle(ChatFormatting.GOLD, ChatFormatting.UNDERLINE) : name;
     }
 
@@ -190,7 +207,7 @@ public final class CulpritScreen extends Screen {
 
     @Override
     public void tick() {
-        if (ClientReport.data() != layoutData || ClientReport.spikesShown() != layoutSpikes) {
+        if (ClientReport.base() != layoutData || ClientReport.spikesShown() != layoutSpikes || ClientReport.framesShown() != layoutFrames) {
             rebuildWidgets();                                  // a new report, or the other view: the header laid out anew
             return;
         }
@@ -216,7 +233,7 @@ public final class CulpritScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
         super.extractRenderState(g, mouseX, mouseY, partial);
         g.text(this.font, this.title.copy().withStyle(ChatFormatting.BOLD), left + 8, top + 6, HEAD);
-        ReportData all = ClientReport.data();
+        ReportData all = ClientReport.base();
         ReportData d = ClientReport.view();
         if (d != null && linesFor != d) {
             linesFor = d;
@@ -226,13 +243,17 @@ public final class CulpritScreen extends Screen {
             java.util.Arrays.fill(lastWidth, -1);
         }
         Component status = statusLine(d);
-        g.text(this.font, status, searchLeft - 6 - this.font.width(status), top + 6, DIM);
+        if (searchLeft - 6 - this.font.width(status) >= sectionRight + 4) {
+            g.text(this.font, status, searchLeft - 6 - this.font.width(status), top + 6, DIM);
+        }
         int inner = right - left - 16;
         if (all == null) {
             int y = listTop + 6;
-            for (FormattedCharSequence line : this.font.split(tr("empty",
-                    "No scan yet. Press %s to scan the server (operators); the results show here.",
-                    CulpritKeys.SCAN.getTranslatedKeyMessage()), inner - 8)) {
+            Component empty = ClientReport.framesShown()
+                    ? tr("empty_frames", "No frame scan yet. Press %s and pick a length under Frames: what each thing in view costs your frame rate shows here.",
+                            CulpritKeys.SCAN.getTranslatedKeyMessage())
+                    : tr("empty", "No scan yet. Press %s to scan the server (operators); the results show here.", CulpritKeys.SCAN.getTranslatedKeyMessage());
+            for (FormattedCharSequence line : this.font.split(empty, inner - 8)) {
                 g.text(this.font, line, left + 12, y, DIM);
                 y += 10;
             }
@@ -254,7 +275,7 @@ public final class CulpritScreen extends Screen {
     }
 
     private Component statusLine(@Nullable ReportData d) {
-        int secondsLeft = ClientReport.secondsLeft();
+        int secondsLeft = ClientReport.framesShown() ? FrameScan.secondsLeft() : ClientReport.secondsLeft();
         if (secondsLeft >= 0) {
             return tr("scanning", "Scanning the server: %s s left...", secondsLeft).withStyle(ChatFormatting.YELLOW);
         }
@@ -262,7 +283,7 @@ public final class CulpritScreen extends Screen {
             return tr("found", "%s of %s found", visible(d).length, rowCount(d));
         }
         if (d != null) {
-            long ago = (System.currentTimeMillis() - ClientReport.receivedMillis()) / 1000;
+            long ago = (System.currentTimeMillis() - ClientReport.baseReceivedMillis()) / 1000;
             return tr("age", "Results from %s ago", ago < 60 ? ago + " s" : ago / 60 + " min");
         }
         return Component.empty();
@@ -278,6 +299,9 @@ public final class CulpritScreen extends Screen {
         if (all == null) {
             return summaryText(Component.literal("99.99 ms"), "99.99 ms", 99999);    // (no report yet: the layout's widest)
         }
+        if (all.frames) {
+            return frameHeadline(all, d);
+        }
         if (!ClientReport.spikesShown()) {
             return summary(all);
         }
@@ -291,8 +315,34 @@ public final class CulpritScreen extends Screen {
                 ReportText.time(d.tickNsMax));
     }
 
+    /** A frame scan's sentence over the lists: its frames', its stutters', or that it had none. */
+    private static Component frameHeadline(ReportData all, @Nullable ReportData d) {
+        if (!ClientReport.spikesShown()) {
+            long mean = all.perTick(all.tickNsTotal);
+            return tr("frames_summary", "A frame took %s on average (%s FPS) and %s at worst over %s frames. Below, all of it: what each part took.",
+                    Component.literal(ReportText.time(mean)).withColor(Heat.rgb(Heat.of(mean / 4))), mean <= 0 ? "-" : String.valueOf(Math.round(1e9 / mean)),
+                    ReportText.time(all.tickNsMax), all.ticks);
+        }
+        if (d == null) {
+            return tr("no_stutters", "No stutters in this scan: no frame took over %s (twice the usual %s, and at least 20 ms). The slowest took %s.",
+                    ReportText.time(all.spikeThresholdNs), ReportText.time(all.medianTickNs), ReportText.time(all.tickNsMax));
+        }
+        return tr("stutters_summary", "%s stutters: frames over %s (twice the usual %s, and at least 20 ms). In them a frame took %s on average and %s at worst. Below, what each part took in them.",
+                d.ticks, ReportText.time(all.spikeThresholdNs), ReportText.time(all.medianTickNs),
+                Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal) / 4))),
+                ReportText.time(d.tickNsMax));
+    }
+
     private static Component viewLabel(boolean spikes) {
+        if (ClientReport.framesShown()) {
+            return spikes ? tr("view.stutters", "Stutters").withStyle(ChatFormatting.GOLD) : tr("view.average", "Average");
+        }
         return spikes ? tr("view.spikes", "Lag spikes").withStyle(ChatFormatting.GOLD) : tr("view.average", "Average");
+    }
+
+    private static Component sectionLabel(boolean frames) {
+        MutableComponent label = frames ? tr("section.frames", "Frames") : tr("section.ticks", "Server ticks");
+        return frames == ClientReport.framesShown() ? label.withStyle(ChatFormatting.GOLD, ChatFormatting.UNDERLINE) : label;
     }
 
     private static Component summaryText(Component mean, String worst, int ticks) {
@@ -315,16 +365,17 @@ public final class CulpritScreen extends Screen {
         }
         int bx = x;
         Component hovered = null;
-        for (int i = 0; i < Breakdown.GROUPS; i++) {
+        int count = Breakdown.groupCount(d);
+        for (int i = 0; i < count; i++) {
             int w = (int) Math.round((double) groups[i] / total * width);
-            if (i == Breakdown.GROUPS - 1) {
+            if (i == count - 1) {
                 w = x + width - bx;
             }
             if (w > 0) {
-                int colour = Breakdown.COLOUR[i];
+                int colour = Breakdown.colour(d, i);
                 g.fill(bx, y, bx + w, y + BAR_H, 0xFF000000 | colour);
                 String time = ReportText.time(d.perTick(groups[i]));
-                Component full = Breakdown.groupName(i).copy().append(" " + time);
+                Component full = Breakdown.groupName(d, i).copy().append(" " + time);
                 Component label = this.font.width(full) + 6 <= w ? full : this.font.width(time) + 4 <= w ? Component.literal(time) : null;
                 if (label != null) {
                     // Dark writing on the light colours, white on the dark ones.
@@ -365,13 +416,10 @@ public final class CulpritScreen extends Screen {
                     Component.literal(place(d.dims[d.modWorstDim[i]], d.modWorstPos[i], d.modWorstKind[i], here())), false, -1,
                     d.modWorstDim[i], d.modWorstPos[i], d.modWorstKind[i], id));
         }
-        long game = 0;
-        for (Breakdown.Part p : Breakdown.parts(d)) {
-            if (p.group() == Breakdown.CHUNKS || p.group() == Breakdown.SERVER) {
-                game += p.totalNs();
-            }
-        }
-        lines.add(new Line(tr("game_work", "The game's own work"), "", game, tr("game_work.about", "chunks, levels, connections: each in the Tick tab"),
+        long game = d.phasesNs() + (d.frames ? 0 : d.kindNs[Kind.CHUNK] + d.kindNs[Kind.SPAWNING]);
+        lines.add(new Line(tr("game_work", "The game's own work"), "", game, d.frames
+                ? tr("game_work.about_frames", "the world, the HUD, waiting: each in the Frame tab")
+                : tr("game_work.about", "chunks, levels, connections: each in the Tick tab"),
                 true, -1, -1, 0, -1, "minecraft"));
         lines.add(new Line(Component.translatableWithFallback("culprit.part.self", "Culprit's own timing"), "", d.selfNs,
                 Component.translatableWithFallback("culprit.part.about.self", "measuring every call, estimated"), true, -1, -1, 0, -1, "culprit"));
@@ -408,8 +456,10 @@ public final class CulpritScreen extends Screen {
         // (or how many); the name takes the rest. Each is as wide as its widest entry in this report; the name keeps at
         // least 100 across, the last column taking what is left up to its width (a third at most for notes), and going
         // when under 40.
-        int shareW = Math.max(this.font.width("99.9%"), this.font.width(tr("col.share", "% of tick"))) + 8;
-        int costW = Math.max(this.font.width("999 µs"), this.font.width(tr("col.cost", "Per tick"))) + 8;
+        Component shareHead = d.frames ? tr("col.share_frame", "% of frame") : tr("col.share", "% of tick");
+        Component costHead = d.frames ? tr("col.cost_frame", "Per frame") : tr("col.cost", "Per tick");
+        int shareW = Math.max(this.font.width("99.9%"), this.font.width(shareHead)) + 8;
+        int costW = Math.max(this.font.width("999 µs"), this.font.width(costHead)) + 8;
         int whereW = switch (tab) {
             case TICK -> 0;
             case THINGS -> Math.max(widest(d, true), this.font.width(tr("col.where", "Where"))) + 10;
@@ -426,12 +476,13 @@ public final class CulpritScreen extends Screen {
         int cShare = cLast - shareW, cCost = cShare - costW, cWhere = cCost - whereW;
 
         int y = listTop + 2;
-        g.text(this.font, tr("col.name." + TABS[tab], NAME_HEADS[tab]), cName, y, HEAD);
+        g.text(this.font, tab == TICK && d.frames ? tr("col.name.frame", "Part of the frame") : tr("col.name." + TABS[tab], NAME_HEADS[tab]),
+                cName, y, HEAD);
         if (tab != TICK) {
             g.text(this.font, tr(tab == THINGS ? "col.where" : "col.count", tab == THINGS ? "Where" : "How many"), cWhere, y, HEAD);
         }
-        g.text(this.font, tr("col.cost", "Per tick"), cCost, y, HEAD);
-        g.text(this.font, tr("col.share", "% of tick"), cShare, y, HEAD);
+        g.text(this.font, costHead, cCost, y, HEAD);
+        g.text(this.font, shareHead, cShare, y, HEAD);
         if (roomForLast) {
             g.text(this.font, lastHead, cLast, y, HEAD);
         }
@@ -460,7 +511,7 @@ public final class CulpritScreen extends Screen {
                 total = line.totalNs();
                 int nx = cName;
                 if (line.group() >= 0) {
-                    g.fill(nx, ry + 1, nx + 6, ry + 7, 0xFF000000 | Breakdown.COLOUR[line.group()]);
+                    g.fill(nx, ry + 1, nx + 6, ry + 7, 0xFF000000 | Breakdown.colour(d, line.group()));
                     nx += 9;
                 }
                 g.text(this.font, clip(line.name(), (tab == TICK || line.count().isEmpty() ? cCost : cWhere) - nx - 6), nx, ry,

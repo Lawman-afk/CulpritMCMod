@@ -5,6 +5,7 @@ import org.jspecify.annotations.Nullable;
 import dev.culprit.command.ReportText;
 import dev.culprit.net.CulpritNetwork;
 import dev.culprit.net.ReportData;
+import dev.culprit.scan.FrameScan;
 import dev.culprit.scan.Kind;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -22,8 +23,12 @@ public final class ClientReport {
     private static int stateTicks;
     private static long stateMillis;
     private static int scanSeconds;
-    /** Whether the results show the lag spikes rather than the average of every tick. */
+    /** Whether the results show the lag spikes (or stutters) rather than the average of every tick (or frame). */
     private static boolean spikesShown;
+    /** The last frame scan's report (made on this client), when it came, and whether the results show it. */
+    private static @Nullable ReportData frames;
+    private static long framesReceivedMillis;
+    private static boolean framesShown;
 
     private ClientReport() {}
 
@@ -31,9 +36,61 @@ public final class ClientReport {
         return data;
     }
 
-    /** The report shown: the average of every tick, or the lag spikes (null when there were none). */
+    /** The scan shown: the server's ticks, or this game's frames. */
+    public static @Nullable ReportData base() {
+        return framesShown ? frames : data;
+    }
+
+    /** The report shown: the shown scan's average, or its lag spikes or stutters (null when there were none). */
     public static @Nullable ReportData view() {
-        return data == null ? null : spikesShown ? data.spikes : data;
+        ReportData base = base();
+        return base == null ? null : spikesShown ? base.spikes : base;
+    }
+
+    /** The last frame scan's report, whichever scan is shown. */
+    public static @Nullable ReportData framesData() {
+        return frames;
+    }
+
+    public static boolean framesShown() {
+        return framesShown;
+    }
+
+    /** Shows the frames' results, or the ticks' again, in the results and on the world. */
+    public static void showFrames(boolean on) {
+        framesShown = on;
+        Overlay.newReport(view());
+    }
+
+    /** When the shown scan's report came. */
+    public static long baseReceivedMillis() {
+        return framesShown ? framesReceivedMillis : receivedMillis;
+    }
+
+    /** Starts a frame scan of this game (it needs nothing from the server); the chat says when it starts and ends. */
+    public static void startFrameScan(int seconds) {
+        boolean started = FrameScan.start(seconds, report -> {
+            ReportData d = ReportData.of(report);
+            d.frames = true;
+            if (d.spikes != null) {
+                d.spikes.frames = true;
+            }
+            receiveFrames(d);
+        });
+        say(tag().append((started ? Component.translatableWithFallback("culprit.chat.frames_started", "Scanning frames for %s seconds.", seconds)
+                : Component.translatableWithFallback("culprit.chat.frames_busy", "A frame scan is already running.")).withStyle(ChatFormatting.GRAY)));
+    }
+
+    private static void receiveFrames(ReportData report) {
+        if (Minecraft.getInstance().level == null) {
+            return;                                             // the world was left while it ran
+        }
+        frames = report;
+        framesReceivedMillis = System.currentTimeMillis();
+        Names.clear();
+        framesShown = true;                                     // the results open on what was just scanned
+        Overlay.newReport(view());
+        say(finished(report));
     }
 
     public static boolean spikesShown() {
@@ -64,6 +121,7 @@ public final class ClientReport {
         data = report;
         receivedMillis = System.currentTimeMillis();
         Names.clear();
+        framesShown = false;                                    // the results open on what was just scanned
         if (state == CulpritNetwork.Status.STARTED || state == CulpritNetwork.Status.BUSY) {
             state = -1;
         }
@@ -110,12 +168,18 @@ public final class ClientReport {
 
     /** "[Culprit] Done. The server tick took ... Costliest: ..." */
     private static Component finished(ReportData d) {
-        MutableComponent line = tag().append(Component.translatableWithFallback("culprit.chat.done",
-                "Done. The server tick took %s on average and %s at worst (it has 50 ms).",
-                Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal)))),
-                ReportText.time(d.tickNsMax)).withStyle(ChatFormatting.WHITE));
-        line.append(" ").append((d.spikes == null ? Component.translatableWithFallback("culprit.chat.no_spikes", "No lag spikes.")
-                : Component.translatableWithFallback("culprit.chat.spikes", "Lag spikes: %s.", d.spikes.ticks)).withStyle(ChatFormatting.WHITE));
+        long mean = d.perTick(d.tickNsTotal);
+        Component meanText = Component.literal(ReportText.time(mean)).withColor(Heat.rgb(Heat.of(d.frames ? mean / 4 : mean)));
+        MutableComponent line = tag().append((d.frames
+                ? Component.translatableWithFallback("culprit.chat.frames_done", "Done. A frame took %s on average (%s FPS) and %s at worst.",
+                        meanText, mean <= 0 ? "-" : String.valueOf(Math.round(1e9 / mean)), ReportText.time(d.tickNsMax))
+                : Component.translatableWithFallback("culprit.chat.done", "Done. The server tick took %s on average and %s at worst (it has 50 ms).",
+                        meanText, ReportText.time(d.tickNsMax))).withStyle(ChatFormatting.WHITE));
+        line.append(" ").append((d.frames
+                ? d.spikes == null ? Component.translatableWithFallback("culprit.chat.no_stutters", "No stutters.")
+                        : Component.translatableWithFallback("culprit.chat.stutters", "Stutters: %s.", d.spikes.ticks)
+                : d.spikes == null ? Component.translatableWithFallback("culprit.chat.no_spikes", "No lag spikes.")
+                        : Component.translatableWithFallback("culprit.chat.spikes", "Lag spikes: %s.", d.spikes.ticks)).withStyle(ChatFormatting.WHITE));
         if (d.types > 0) {
             MutableComponent top = Component.empty();
             for (int i = 0; i < Math.min(3, d.types); i++) {
@@ -168,6 +232,9 @@ public final class ClientReport {
     /** Forgets everything (on leaving a world). */
     static void clear() {
         data = null;
+        frames = null;
+        framesShown = false;
+        FrameScan.stop();
         state = -1;
         spikesShown = false;
         Overlay.newReport(null);

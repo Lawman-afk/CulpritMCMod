@@ -3,6 +3,7 @@ package dev.culprit;
 import dev.culprit.client.ClientNetwork;
 import dev.culprit.client.CulpritKeys;
 import dev.culprit.client.DevRuns;
+import dev.culprit.client.FrameEvents;
 import dev.culprit.client.Overlay;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -19,6 +20,7 @@ public class CulpritClient {
         ClientNetwork.register(modBus);
         CulpritKeys.register(modBus);
         Overlay.register();
+        FrameEvents.register();                               // mods' frame events, timed during a frame scan
         // What the crosshair rests on, read out under it while the results are shown on the world.
         modBus.addListener((RegisterGuiLayersEvent event) -> event.registerAbove(VanillaGuiLayers.CROSSHAIR, Culprit.id("readout"), Overlay::drawReadout));
     }

@@ -11,7 +11,11 @@
     "MinecraftServerMixin"
   ],
   "client": [
-    "DevMouseMixin"
+    "DevMouseMixin",
+    "MinecraftFrameMixin",
+    "GameRendererFrameMixin",
+    "LevelExtractorFrameMixin",
+    "LevelRendererFrameMixin"
   ],
   "injectors": {
     "defaultRequire": 1

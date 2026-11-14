@@ -53,7 +53,7 @@ public final class ScanReport {
     /** Total measured time per {@link Kind}. */
     public final long[] kindNs = new long[Kind.COUNT];
     /** Total own time per {@link Phase} of the tick. */
-    public final long[] phaseNs = new long[Phase.COUNT];
+    public final long[] phaseNs;
     /** Culprit's own timing, estimated: every measured call times what measuring one costs. */
     public final long selfNs;
     public final List<Thing> things;
@@ -74,7 +74,7 @@ public final class ScanReport {
         this.medianTickNs = medianTickNs;
         this.spikeThresholdNs = spikeThresholdNs;
         this.spikes = spikes;
-        System.arraycopy(phaseNs, 0, this.phaseNs, 0, Phase.COUNT);
+        this.phaseNs = phaseNs.clone();
         this.selfNs = selfNs;
         this.ticks = ticks;
         this.tickNsTotal = tickNsTotal;
@@ -127,12 +127,12 @@ public final class ScanReport {
      * A scan's report from its table: every tick's average, and beside it the lag spikes, the kept slowest ticks that
      * took over twice the usual tick (and at least {@link #SPIKE_FLOOR_NS}), with what each thing and part took in them.
      */
-    static ScanReport of(CostTable t, int ticks, long tickNsTotal, long tickNsMax, long startedAtMillis, long perCallNs) {
+    static ScanReport of(CostTable t, int ticks, long tickNsTotal, long tickNsMax, long startedAtMillis, long perCallNs, long spikeFloorNs) {
         long[] times = t.tickTimes.toLongArray();
         java.util.Arrays.sort(times);
         long median = times.length == 0 ? 0 : times[times.length / 2];
-        long threshold = Math.max(2 * median, SPIKE_FLOOR_NS);
-        long[] total = new long[t.size], max = new long[t.size], calls = new long[t.size], phases = new long[Phase.COUNT];
+        long threshold = Math.max(2 * median, spikeFloorNs);
+        long[] total = new long[t.size], max = new long[t.size], calls = new long[t.size], phases = new long[t.phaseNs.length];
         int spikeTicks = 0;
         long spikeTotal = 0, spikeMax = 0, spikeCalls = 0;
         for (CostTable.TickRecord record : t.kept) {
@@ -149,7 +149,7 @@ public final class ScanReport {
                 max[s] = Math.max(max[s], record.ns[k]);
                 calls[s]++;
             }
-            for (int p = 0; p < Phase.COUNT; p++) {
+            for (int p = 0; p < phases.length; p++) {
                 phases[p] += record.phases[p];
             }
         }

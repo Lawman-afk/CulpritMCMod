@@ -108,7 +108,7 @@ public final class TickScan {
     }
 
     private void begin() {
-        table = new CostTable(Math.clamp(ticksWanted / 20, 5, 60));   // the slowest 5 % of ticks kept whole, for the spikes
+        table = new CostTable(Math.clamp(ticksWanted / 20, 5, 60), Phase.COUNT);   // the slowest 5 % of ticks kept whole, for the spikes
         Probe.table = table;
         Probe.thread = Thread.currentThread();
         Probe.overheadNs = timerCost();
@@ -122,7 +122,7 @@ public final class TickScan {
         Probe.table = null;
         running = null;
         if (report) {
-            ScanReport r = ScanReport.of(table, ticksDone, tickNsTotal, tickNsMax, startedAtMillis, Probe.perCallNs);
+            ScanReport r = ScanReport.of(table, ticksDone, tickNsTotal, tickNsMax, startedAtMillis, Probe.perCallNs, ScanReport.SPIKE_FLOOR_NS);
             last = r;
             if (onDone != null) {
                 onDone.accept(r);
@@ -132,7 +132,7 @@ public final class TickScan {
     }
 
     /** One {@code System.nanoTime()} call's cost: the least of many back-to-back pairs, so a timing's own cost comes off it. */
-    private static long timerCost() {
+    static long timerCost() {
         long best = Long.MAX_VALUE;
         for (int round = 0; round < 20; round++) {
             long a = System.nanoTime();

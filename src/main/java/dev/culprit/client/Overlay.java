@@ -478,7 +478,7 @@ public final class Overlay {
         FormattedCharSequence[] cache = labelCost;
         if (cache[i] == null) {
             long perTick = r.perTick(r.total[i]);
-            cache[i] = Component.literal(ReportText.time(perTick) + "/t").withColor(Heat.rgb(Heat.of(perTick)))
+            cache[i] = Component.literal(ReportText.time(perTick) + (r.frames ? "/f" : "/t")).withColor(Heat.rgb(Heat.of(perTick)))
                     .append(Component.literal("  " + ReportText.share(r.total[i], r.tickNsTotal)).withColor(0xC8C8C8)).getVisualOrderText();
         }
         return cache[i];
@@ -490,7 +490,7 @@ public final class Overlay {
 
     private static FormattedCharSequence chunkCost(ReportData r, int i) {
         long perTick = r.perTick(r.chunkTotal[i]);
-        return Component.literal(ReportText.time(perTick) + "/t").withColor(Heat.rgb(Heat.of(perTick)))
+        return Component.literal(ReportText.time(perTick) + (r.frames ? "/f" : "/t")).withColor(Heat.rgb(Heat.of(perTick)))
                 .append(Component.literal("  " + ReportText.share(r.chunkTotal[i], r.tickNsTotal)).withColor(0xC8C8C8)).getVisualOrderText();
     }
 
@@ -584,7 +584,9 @@ public final class Overlay {
     private static FormattedCharSequence costLine(ReportData r, long total) {
         long perTick = r.perTick(total);
         return Component.literal(ReportText.time(perTick)).withColor(Heat.rgb(Heat.of(perTick)))
-                .append(Component.translatableWithFallback("culprit.readout.cost", " a tick, %s of the tick", ReportText.share(total, r.tickNsTotal))
+                .append((r.frames ? Component.translatableWithFallback("culprit.readout.cost_frame", " a frame, %s of the frame",
+                        ReportText.share(total, r.tickNsTotal))
+                        : Component.translatableWithFallback("culprit.readout.cost", " a tick, %s of the tick", ReportText.share(total, r.tickNsTotal)))
                         .withColor(0xC8C8C8)).getVisualOrderText();
     }
 

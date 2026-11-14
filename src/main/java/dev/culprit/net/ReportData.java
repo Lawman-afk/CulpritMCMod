@@ -29,7 +29,9 @@ public final class ReportData {
     public int thingCount;
     public final long[] kindNs = new long[Kind.COUNT];
     /** The tick's phases' own time ({@link Phase}), and Culprit's own timing, estimated. */
-    public final long[] phaseNs = new long[Phase.COUNT];
+    public long[] phaseNs = new long[Phase.COUNT];
+    /** A frame scan's report (made on this client): its ticks are frames, its parts {@link dev.culprit.scan.FramePhase}s. */
+    public boolean frames;
     public long selfNs;
     /** The scan's usual tick (its median), and the time over which a tick counts as a lag spike. */
     public long medianTickNs, spikeThresholdNs;
@@ -107,7 +109,7 @@ public final class ReportData {
         d.incomplete = r.incomplete;
         d.thingCount = r.things.size();
         System.arraycopy(r.kindNs, 0, d.kindNs, 0, Kind.COUNT);
-        System.arraycopy(r.phaseNs, 0, d.phaseNs, 0, Phase.COUNT);
+        d.phaseNs = r.phaseNs.clone();
         d.selfNs = r.selfNs;
         Table dims = new Table();
         Table names = new Table();
@@ -196,6 +198,7 @@ public final class ReportData {
     }
 
     public void write(FriendlyByteBuf buf) {
+        buf.writeBoolean(frames);
         buf.writeVarInt(ticks);
         buf.writeVarLong(tickNsTotal);
         buf.writeVarLong(tickNsMax);
@@ -204,6 +207,7 @@ public final class ReportData {
         for (long ns : kindNs) {
             buf.writeVarLong(ns);
         }
+        buf.writeVarInt(phaseNs.length);
         for (long ns : phaseNs) {
             buf.writeVarLong(ns);
         }
@@ -265,6 +269,7 @@ public final class ReportData {
     /** Reads a report, with a spikes report inside it only when {@code outer} (never one inside that). */
     private static ReportData read(FriendlyByteBuf buf, boolean outer) {
         ReportData d = new ReportData();
+        d.frames = buf.readBoolean();
         d.ticks = buf.readVarInt();
         d.tickNsTotal = buf.readVarLong();
         d.tickNsMax = buf.readVarLong();
@@ -273,7 +278,8 @@ public final class ReportData {
         for (int k = 0; k < Kind.COUNT; k++) {
             d.kindNs[k] = buf.readVarLong();
         }
-        for (int p = 0; p < Phase.COUNT; p++) {
+        d.phaseNs = new long[Math.clamp(buf.readVarInt(), 0, 64)];
+        for (int p = 0; p < d.phaseNs.length; p++) {
             d.phaseNs[p] = buf.readVarLong();
         }
         d.selfNs = buf.readVarLong();
