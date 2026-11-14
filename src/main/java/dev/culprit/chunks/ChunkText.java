@@ -16,8 +16,9 @@ import net.minecraft.network.chat.MutableComponent;
  * named with how many chunks each keeps.
  */
 public final class ChunkText {
-    private static final String[] REASON_KEYS = {"players", "mods", "forced", "portals", "pearls", "spawn", "other"};
-    private static final String[] REASON_ENGLISH = {"players", "mods", "/forceload", "portals", "ender pearls", "the world spawn", "other"};
+    private static final String[] REASON_KEYS = {"players", "mods", "forced", "portals", "pearls", "spawn", "other", "requests"};
+    private static final String[] REASON_ENGLISH = {"players", "mods", "/forceload", "portals", "ender pearls", "the world spawn", "other",
+            "passing requests"};
 
     private ChunkText() {}
 
@@ -67,9 +68,13 @@ public final class ChunkText {
             if (d.sreason[s] == ChunkData.PLAYERS || d.sowner[s].equals(ChunkCensus.PASSING)) {
                 continue;                                   // (players' areas are expected; passing requests go a tick later)
             }
+            int reach = d.reach(s), chunks = (2 * reach + 1) * (2 * reach + 1);
+            if (d.sreason[s] == ChunkData.REQUESTS) {
+                counts.computeIfAbsent(d.sowner[s], k -> new int[1])[0] += chunks;   // (whoever asked, all its chunks together)
+                continue;
+            }
             String key = d.sowner[s] + " at chunk " + d.sx[s] + ", " + d.sz[s];
-            int reach = d.reach(s);
-            counts.computeIfAbsent(key, k -> new int[1])[0] = Math.max(counts.get(key) == null ? 0 : counts.get(key)[0], (2 * reach + 1) * (2 * reach + 1));
+            counts.computeIfAbsent(key, k -> new int[1])[0] = Math.max(counts.get(key) == null ? 0 : counts.get(key)[0], chunks);
         }
         List<Map.Entry<String, int[]>> sorted = new ArrayList<>(counts.entrySet());
         sorted.sort((a, b) -> Integer.compare(b.getValue()[0], a.getValue()[0]));

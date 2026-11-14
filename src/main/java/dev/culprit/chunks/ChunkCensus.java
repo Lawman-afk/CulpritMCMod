@@ -63,6 +63,7 @@ public final class ChunkCensus {
         TicketStorage storage = level.getDataStorage().computeIfAbsent(TicketStorage.TYPE);
         Long2ObjectMap<List<String>> modOwners = modOwners(level, storage);
         var holders = ((ChunkMapAccessor) level.getChunkSource().chunkMap).culprit$visibleChunkMap();
+        PassingRequests.forgetUnloaded(level, null);
 
         // The loading tickets, at the chunks they sit on (each is a loaded chunk itself).
         List<Source> sources = new ArrayList<>();
@@ -112,11 +113,16 @@ public final class ChunkCensus {
                 if (lvl > ChunkData.FULL_LEVEL) {
                     continue;
                 }
-                reasons |= 1 << source.reason;
+                if (source.reason != ChunkData.REQUESTS) {
+                    reasons |= 1 << source.reason;          // (a passing request counts only where it is all there is)
+                }
                 if (lvl < bestLevel || (lvl == bestLevel && best >= 0 && priority(source.reason) > priority(sources.get(best).reason))) {
                     best = s;
                     bestLevel = lvl;
                 }
+            }
+            if (best >= 0 && sources.get(best).reason == ChunkData.REQUESTS) {
+                reasons |= 1 << ChunkData.REQUESTS;
             }
             LevelChunk chunk = level.getChunkSource().getChunkNow(x, z);
             byte st = status == FullChunkStatus.ENTITY_TICKING ? ChunkData.ENTITY_TICKING
@@ -124,6 +130,27 @@ public final class ChunkCensus {
             rows.add(new long[]{x, z, st, best < 0 ? ChunkData.OTHER : sources.get(best).reason, best, reasons,
                     chunk == null ? 0 : chunk.getBlockEntities().size(), entities.get(key)});
         }
+        // A passing request where something else keeps the chunk loaded is not why it is (a chunk of a player's area that
+        // something read just now is the player's): only those that are all a chunk has are kept.
+        boolean[] needed = new boolean[sources.size()];
+        for (long[] r : rows) {
+            if (r[4] >= 0) {
+                needed[(int) r[4]] = true;
+            }
+        }
+        int[] newIndex = new int[sources.size()];
+        List<Source> kept = new ArrayList<>(sources.size());
+        for (int s = 0; s < sources.size(); s++) {
+            newIndex[s] = sources.get(s).reason != ChunkData.REQUESTS || needed[s] ? kept.size() : -1;
+            if (newIndex[s] >= 0) {
+                kept.add(sources.get(s));
+            }
+        }
+        for (long[] r : rows) {
+            r[4] = r[4] >= 0 ? newIndex[(int) r[4]] : -1;
+        }
+        sources = kept;
+
         d.chunks = rows.size();
         d.x = new int[d.chunks];
         d.z = new int[d.chunks];
@@ -164,6 +191,7 @@ public final class ChunkCensus {
     /** On a tie, the reason named: a player's surroundings are expected to be loaded, a mod's or a forced chunk not. */
     private static int priority(byte reason) {
         return switch (reason) {
+            case ChunkData.REQUESTS -> -1;                      // (asked for just now: whatever else holds it is why)
             case ChunkData.MODS -> 6;
             case ChunkData.FORCED -> 5;
             case ChunkData.PEARLS -> 4;
@@ -189,6 +217,9 @@ public final class ChunkCensus {
         }
         if (type == TicketType.PLAYER_SPAWN || type == TicketType.SPAWN_SEARCH) {
             return ChunkData.SPAWN;
+        }
+        if (type == TicketType.UNKNOWN) {
+            return ChunkData.REQUESTS;
         }
         Identifier id = BuiltInRegistries.TICKET_TYPE.getKey(type);
         // (NeoForge's own is its /neoforge generate command making new chunks, no mod's)
@@ -227,6 +258,8 @@ public final class ChunkCensus {
                 yield "an ender pearl";
             }
             case ChunkData.SPAWN -> "the world spawn";
+            // The game asked for the chunk just now (and lets go of it a tick later): who asked, if a request loaded it.
+            case ChunkData.REQUESTS -> PassingRequests.describe(PassingRequests.of(level, chunk));
             case ChunkData.MODS -> {
                 // A NeoForge chunk loader is the mod's and the block or entity that owns it; a mod's own kind of ticket its.
                 List<String> owners = modOwners.get(chunk);
@@ -235,9 +268,7 @@ public final class ChunkCensus {
                 }
                 yield id == null ? typeName : OwnerNames.ticketType(id);
             }
-            // The game asked for the chunk just now (and lets go of it a tick later): no loader to act on.
-            default -> typeName.equals("minecraft:dragon") ? "the dragon fight" : type == TicketType.UNKNOWN ? PASSING
-                    : GENERATE.equals(id) ? "/neoforge generate" : typeName;
+            default -> typeName.equals("minecraft:dragon") ? "the dragon fight" : GENERATE.equals(id) ? "/neoforge generate" : typeName;
         };
     }
 

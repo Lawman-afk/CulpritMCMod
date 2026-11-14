@@ -13,8 +13,8 @@ import net.minecraft.network.FriendlyByteBuf;
  */
 public final class ChunkData {
     /** Why a chunk is loaded (its colour in the results and on the world). */
-    public static final byte PLAYERS = 0, MODS = 1, FORCED = 2, PORTALS = 3, PEARLS = 4, SPAWN = 5, OTHER = 6;
-    public static final int REASONS = 7;
+    public static final byte PLAYERS = 0, MODS = 1, FORCED = 2, PORTALS = 3, PEARLS = 4, SPAWN = 5, OTHER = 6, REQUESTS = 7;
+    public static final int REASONS = 8;
     /** How active a loaded chunk is. */
     public static final byte BORDER = 0, BLOCK_TICKING = 1, ENTITY_TICKING = 2;
     /** The chunk level up to which a chunk is playable (loaded in full): a source of level L reaches 33 - L chunks out. */

@@ -2,8 +2,6 @@ package dev.culprit.chunks;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -21,17 +19,14 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.CommandBlock;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
-import net.neoforged.fml.ModList;
-import net.neoforged.neoforgespi.language.IModFileInfo;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Who forced each chunk the game's own way (DESIGN §4.3). The /forceload command and a mod calling the game's
  * {@code setChunkForced} make the same ticket, which carries no owner; so each change is recorded as it happens
  * ({@code ForcedChunkMixin}), per level, and saved with the world so it holds across restarts: who ran /forceload
- * ({@code ForceLoadCommandMixin} says), or the mod whose code asked (the first class on the stack that is no part of the
- * game, NeoForge or a library, found in the mod files), or the game itself (its test structures). A chunk forced before
- * Culprit was installed has no record.
+ * ({@code ForceLoadCommandMixin} says), or the mod whose code asked ({@link Callers}), or the game itself (its test
+ * structures). A chunk forced before Culprit was installed has no record.
  */
 public final class ForcedBy extends SavedData {
     private record Entry(int x, int z, String by) {
@@ -44,9 +39,7 @@ public final class ForcedBy extends SavedData {
     public static final Codec<ForcedBy> CODEC = Entry.CODEC.listOf().xmap(ForcedBy::new, ForcedBy::entries);
     public static final SavedDataType<ForcedBy> TYPE = new SavedDataType<>(Culprit.id("forced_chunks"), ForcedBy::new, CODEC);
 
-    private static final String COMMAND = "cmd:", MOD = "mod:", GAME = "game:";
-    private static final StackWalker WALKER = StackWalker.getInstance();
-    private static final Map<String, String> MOD_OF_CLASS = new ConcurrentHashMap<>();
+    private static final String COMMAND = "cmd:";
     /** Who is running /forceload now, while it runs (on the server thread), else null. */
     private static @Nullable String commandBy;
 
@@ -98,7 +91,8 @@ public final class ForcedBy extends SavedData {
         try {
             long key = pos.pack();
             if (forced) {
-                String who = commandBy != null ? COMMAND + commandBy : caller();
+                // (past the forcing itself: the server level and its chunk source)
+                String who = commandBy != null ? COMMAND + commandBy : Callers.of(name -> name.startsWith("net.minecraft.server.level."));
                 if (who != null) {
                     ForcedBy record = level.getDataStorage().computeIfAbsent(TYPE);
                     record.by.put(key, who);
@@ -128,61 +122,11 @@ public final class ForcedBy extends SavedData {
         return source.source instanceof MinecraftServer ? "the server" : source.getTextName();
     }
 
-    /**
-     * The code that forced the chunk, from the stack: the first class that is no part of the game, NeoForge or a library
-     * is a mod's, named by the mod file holding it; with none, the game's own class that asked.
-     */
-    private static @Nullable String caller() {
-        List<String> classes = WALKER.walk(frames -> frames.map(StackWalker.StackFrame::getClassName).limit(128).toList());
-        String game = null;
-        for (String name : classes) {
-            if (name.equals(ForcedBy.class.getName()) || name.startsWith("net.minecraft.server.level.") || isLibrary(name)) {
-                continue;                                       // (the forcing itself, and what any code may go through)
-            }
-            if (name.startsWith("net.minecraft.") || name.startsWith("net.neoforged.") || name.startsWith("com.mojang.")) {
-                if (game == null) {
-                    game = name.substring(name.lastIndexOf('.') + 1);
-                }
-                continue;                                       // (a mod may have called the game, which forced it)
-            }
-            return MOD + modOf(name);
-        }
-        return game == null ? null : GAME + game;
-    }
-
-    private static boolean isLibrary(String name) {
-        for (String prefix : new String[]{"java.", "javax.", "jdk.", "sun.", "kotlin.", "scala.", "com.google.", "it.unimi.", "org.apache.",
-                "io.netty.", "org.spongepowered.", "com.llamalad7.", "cpw.mods.", "org.slf4j."}) {
-            if (name.startsWith(prefix)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** The mod whose file holds a class; "?package" when none does. */
-    private static String modOf(String className) {
-        return MOD_OF_CLASS.computeIfAbsent(className, name -> {
-            String path = name.replace('.', '/') + ".class";
-            try {
-                for (IModFileInfo file : ModList.get().getModFiles()) {
-                    if (!file.getMods().isEmpty() && file.getFile().getContents().containsFile(path)) {
-                        return file.getMods().getFirst().getModId();
-                    }
-                }
-            } catch (RuntimeException | LinkageError e) {
-                Culprit.LOGGER.debug("Culprit: could not find the mod of {}", name, e);
-            }
-            int dot = name.lastIndexOf('.');
-            return "?" + (dot < 0 ? name : name.substring(0, dot));
-        });
-    }
-
     // ---- reading ----
 
     /** The reason a forced chunk is loaded, by its record: a mod's code made it a mod's, the game's own "other". */
     static byte reason(@Nullable String by) {
-        return by == null || by.startsWith(COMMAND) ? ChunkData.FORCED : by.startsWith(MOD) ? ChunkData.MODS : ChunkData.OTHER;
+        return by == null || by.startsWith(COMMAND) ? ChunkData.FORCED : by.startsWith(Callers.MOD) ? ChunkData.MODS : ChunkData.OTHER;
     }
 
     /** A forced chunk's owner in words: "/forceload by Steve", "Mekanism: forced chunk", "/forceload or a mod". */
@@ -193,14 +137,9 @@ public final class ForcedBy extends SavedData {
         if (by.startsWith(COMMAND)) {
             return "/forceload by " + by.substring(COMMAND.length());
         }
-        if (by.startsWith(MOD)) {
-            String mod = by.substring(MOD.length());
-            return (mod.startsWith("?") ? "a mod (" + mod.substring(1) + ")" : OwnerNames.mod(mod)) + ": forced chunk";
+        if (by.equals(Callers.GAME + "TestInstanceBlockEntity")) {
+            return "the game's test structures";
         }
-        if (by.startsWith(GAME)) {
-            String what = by.substring(GAME.length());
-            return what.equals("TestInstanceBlockEntity") ? "the game's test structures" : "the game (" + what + ")";
-        }
-        return by;
+        return Callers.describe(by) + ": forced chunk";
     }
 }

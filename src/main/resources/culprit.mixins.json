@@ -11,7 +11,8 @@
     "MinecraftServerMixin",
     "ChunkMapAccessor",
     "ForcedChunkMixin",
-    "ForceLoadCommandMixin"
+    "ForceLoadCommandMixin",
+    "PassingRequestMixin"
   ],
   "client": [
     "DevMouseMixin",

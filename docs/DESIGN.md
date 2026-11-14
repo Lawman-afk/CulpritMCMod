@@ -117,9 +117,13 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
     NeoForge or a library, found in the mod files), the game's test structures; a chunk forced before Culprit was
     installed reads "/forceload or a mod".
   - NeoForge's `/neoforge generate` making new chunks; portals, ender pearls (and who threw them), the dragon fight,
-    the spawn, players; the game's passing requests (a chunk asked for just now, let go a tick later).
-  Not yet named: the code behind passing requests (a mod that keeps a chunk loaded by asking for it every tick shows as
-  passing requests, not by name).
+    the spawn, players.
+  - Passing requests (2026-11-15), their own reason: code that reads a block in an unloaded chunk makes the game load it
+    there and then (a stall on the server thread) and hold it a tick; asked again every tick, it stays loaded. When such
+    a request has to load a chunk in full, the code that asked is noted, in memory while the chunk stays loaded:
+    "Mekanism: asked for it", or "the game (Raid): asked for it". A request where anything else holds the chunk is not
+    why it is loaded (every tick something reads the chunks of a player's area), so it is left out of the results; on a
+    tie of strength it is taken last.
 
 ### 4.4 Results on the world and on screen
 
@@ -256,3 +260,4 @@ cost nothing); ModernFix.
 | 2026-11-14 | Particles by kind (a new kind, chunk-wide like random ticks: per kind and chunk, not per particle) and the drawing shared out by parts handed in: the two gaps the first frame scan left, done before the chunk inspector. A particle's type is kept in a field set when the engine makes it (a mixin), its cost charged by kind; one added another way is named by its class. |
 | 2026-11-14 | The chunk inspector built on 26.3 ("continue with your plans"): a chunk's reason is its strongest loading ticket's (level plus distance), a player's taken last on a tie (a player's surroundings are expected to be loaded; a mod's or a forced chunk is what stays when everyone leaves); a loader is listed with every chunk it keeps playable, not only those it is strongest for. NeoForge's chunk-loader owners are read through the world's save codec rather than its private trackers (public, and what the world itself writes). Sent on request (operators, as scans), at most 40,000 chunks. |
 | 2026-11-14 | The user asked whether the inspector accounts for modded chunk loaders "of any type". Every loading ticket was already read, so every loader was counted; two kinds were named wrongly. A loader owned by an id that is no entity (FTB Chunks keeps a team's claims under the team's id, which we checked in its source) read "an entity not loaded"; it is now named as the player or team. A mod forcing a chunk the game's own way read "/forceload"; a record of each change, kept with the world, now says who ran /forceload or which mod's code asked. The mod is found from the stack, by the first class that is not the game's, found in the mod files: dependable, and paid only when a chunk is forced. Both hooks are optional (`require = 0`), like the frame hooks. Mods are named as they name themselves, blocks and entities as the game does. |
+| 2026-11-15 | Passing requests named and put in their place (the user said yes to it, then "continue your development plan"). In the Lab, 287 of a player's chunks read "passing requests": something reads them every tick, and on a tie of strength a passing request won over the player. Now a passing request is taken last and dropped wherever anything else holds the chunk; where it is all a chunk has, the code that made the request load it is named. The request that has to load a chunk is the only one walked, so reading loaded chunks costs nothing more. The stack walk is shared with the forced-chunk record. |

@@ -25,7 +25,7 @@ import net.minecraft.world.level.ChunkPos;
  */
 final class ChunksPanel {
     /** The reasons' colours (Okabe and Ito's set): players, mods, /forceload, portals, ender pearls, the spawn, other. */
-    static final int[] COLOUR = {0x56B4E9, 0xE69F00, 0xD55E00, 0xCC79A7, 0x009E73, 0xF0E442, 0x8C8C8C};
+    static final int[] COLOUR = {0x56B4E9, 0xE69F00, 0xD55E00, 0xCC79A7, 0x009E73, 0xF0E442, 0x8C8C8C, 0xC8C8C8};
     private static final int ROW = 11, TEXT = 0xFFFFFFFF, DIM = 0xFFA8AFBA, HEAD = 0xFFFFC34D;
 
     /** A loader: why, who or what, its chunk, how many chunks it keeps loaded, and the sources it gathers. */
@@ -99,9 +99,9 @@ final class ChunksPanel {
         }
         Map<String, List<Integer>> bySame = new HashMap<>();
         for (int s = 0; s < d.sources; s++) {
-            // A player's tickets are one row, as are the game's passing requests, wherever they are; any other loader one
-            // per chunk (two of a mod's machines are two loaders).
-            boolean anywhere = d.sreason[s] == ChunkData.PLAYERS || d.sowner[s].equals(dev.culprit.chunks.ChunkCensus.PASSING);
+            // A player's tickets are one row, as are the passing requests of each who asked, wherever they are; any other
+            // loader one per chunk (two of a mod's machines are two loaders).
+            boolean anywhere = d.sreason[s] == ChunkData.PLAYERS || d.sreason[s] == ChunkData.REQUESTS;
             bySame.computeIfAbsent(d.sreason[s] + "|" + d.sowner[s] + (anywhere ? "" : "|" + d.sx[s] + "|" + d.sz[s]), k -> new ArrayList<>()).add(s);
         }
         List<Group> out = new ArrayList<>();

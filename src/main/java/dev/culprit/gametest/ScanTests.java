@@ -108,15 +108,17 @@ final class ScanTests {
 
         // The chunk inspector: far from the plot, a chunk forced by /forceload (the server runs it), one forced the game's
         // way by a mod's code (this one's), one kept by a mod's chunk loader that a hopper owns, and one by a loader
-        // owned by an id that is no entity (a team's, the way FTB Chunks keeps a team's claims). Each is named as such,
-        // with the mod, block or owner behind it, their neighbours are loaded by them, the plot's own chunk is the test
-        // structure's, and the record of who forced what is saved and loaded whole and drops a chunk let go of.
+        // owned by an id that is no entity (a team's, the way FTB Chunks keeps a team's claims), and one this mod's code
+        // keeps asking for (a passing request, loading it the first time). Each is named as such, with the mod, block or
+        // owner behind it, their neighbours are loaded by them, the plot's own chunk is the test structure's, a passing
+        // request where something else holds the chunk is not its reason, and the record of who forced what is saved and
+        // loaded whole and drops a chunk let go of.
         CulpritGameTests.testAlone("chunks_name_their_loaders", CulpritGameTests.FLOOR_16, 400, helper -> {
             ServerLevel level = helper.getLevel();
             helper.setBlock(0, 1, 0, Blocks.HOPPER);
             BlockPos owner = helper.absolutePos(new BlockPos(0, 1, 0));
             ChunkPos home = ChunkPos.containing(owner);
-            Loaders at = new Loaders(home.x() + 40, home.x() + 46, home.x() + 52, home.x() + 58, home.z());
+            Loaders at = new Loaders(home.x() + 40, home.x() + 46, home.x() + 52, home.x() + 58, home.x() + 64, home.z());
             level.getServer().getCommands().performPrefixedCommand(serverSource(level), "forceload add " + at.command() * 16 + " " + at.z() * 16);
             level.setChunkForced(at.code(), at.z(), true);
             GameTestRegistration.CONTROLLER.forceChunk(level, owner, at.block(), at.z(), true, false);
@@ -345,35 +347,43 @@ final class ScanTests {
     /** An id that is no entity, owning a chunk loader the way a team owns FTB Chunks' (its first eight digits name it). */
     private static final UUID TEAM = UUID.nameUUIDFromBytes("culprit test team".getBytes(StandardCharsets.UTF_8));
 
-    /** The chunks x of the four loaders, on one row z. */
-    private record Loaders(int command, int code, int block, int team, int z) {}
+    /** The chunks x of the five loaders, on one row z. */
+    private record Loaders(int command, int code, int block, int team, int asked, int z) {}
 
     private static CommandSourceStack serverSource(ServerLevel level) {
         return level.getServer().createCommandSourceStack().withLevel(level).withSuppressedOutput();
     }
 
     private static void waitForChunks(GameTestHelper helper, ServerLevel level, BlockPos owner, Loaders at, int tries) {
+        // Asked for again each time, as a mod reading a block there every tick would (the request lasts a tick); and the
+        // forced chunk's edge, which it holds at the same strength as a request does.
+        level.getChunk(at.asked(), at.z());
+        level.getChunk(at.command() + 2, at.z());
         ChunkData data = ChunkCensus.take(level.getServer());
         ChunkData.Dim d = data.dims.stream().filter(x -> x.dim.equals(level.dimension().identifier().toString())).findFirst().orElseThrow();
         int command = chunkAt(d, at.command(), at.z()), code = chunkAt(d, at.code(), at.z()), block = chunkAt(d, at.block(), at.z());
-        int team = chunkAt(d, at.team(), at.z()), next = chunkAt(d, at.command() + 1, at.z());
-        if ((command < 0 || code < 0 || block < 0 || team < 0 || next < 0) && tries < 30) {
+        int team = chunkAt(d, at.team(), at.z()), asked = chunkAt(d, at.asked(), at.z()), next = chunkAt(d, at.command() + 1, at.z());
+        int edge = chunkAt(d, at.command() + 2, at.z());
+        if ((command < 0 || code < 0 || block < 0 || team < 0 || asked < 0 || next < 0 || edge < 0) && tries < 30) {
             helper.runAfterDelay(10, () -> waitForChunks(helper, level, owner, at, tries + 1));
             return;
         }
         long commandKey = ChunkPos.pack(at.command(), at.z()), codeKey = ChunkPos.pack(at.code(), at.z());
         try {
-            helper.assertTrue(command >= 0 && code >= 0 && block >= 0 && team >= 0, "the four loaders' chunks are loaded");
+            helper.assertTrue(command >= 0 && code >= 0 && block >= 0 && team >= 0 && asked >= 0, "the five loaders' chunks are loaded");
             assertKept(helper, d, command, ChunkData.FORCED, "/forceload by the server");
             assertKept(helper, d, code, ChunkData.MODS, "Culprit: forced chunk");
             assertKept(helper, d, block, ChunkData.MODS, "Culprit: Hopper at " + owner.getX() + " " + owner.getY() + " " + owner.getZ());
             assertKept(helper, d, team, ChunkData.MODS, "Culprit: owner " + TEAM.toString().substring(0, 8));
+            assertKept(helper, d, asked, ChunkData.REQUESTS, "Culprit: asked for it");
+            assertKept(helper, d, edge, ChunkData.FORCED, "/forceload by the server");
             ChunkPos home = ChunkPos.containing(owner);
             assertKept(helper, d, chunkAt(d, home.x(), home.z()), ChunkData.OTHER, "the game's test structures");
             helper.assertTrue(next >= 0 && d.reason[next] == ChunkData.FORCED && d.status[next] <= d.status[command],
                     "the forced chunk's neighbour is loaded by it, and no more busy than it");
             List<String> lines = ChunkText.loaders(d, 1000);
-            for (String loader : List.of("/forceload by the server", "Culprit: forced chunk", "Culprit: Hopper", "Culprit: owner")) {
+            for (String loader : List.of("/forceload by the server", "Culprit: forced chunk", "Culprit: Hopper", "Culprit: owner",
+                    "Culprit: asked for it")) {
                 helper.assertTrue(lines.stream().anyMatch(line -> line.startsWith(loader)), "the text names " + loader + ": " + lines);
             }
 

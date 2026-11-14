@@ -352,6 +352,7 @@ public final class Overlay {
         int named = 0;
         for (int s = 0; s < d.sources && named < MAX_CHUNK_LABELS; s++) {
             if (d.sreason[s] == dev.culprit.net.ChunkData.PLAYERS || d.sreason[s] == dev.culprit.net.ChunkData.OTHER
+                    || d.sreason[s] == dev.culprit.net.ChunkData.REQUESTS
                     || Math.abs(d.sx[s] - camCx) > TILE_CHUNKS || Math.abs(d.sz[s] - camCz) > TILE_CHUNKS) {
                 continue;
             }
