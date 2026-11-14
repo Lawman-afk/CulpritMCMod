@@ -32,6 +32,8 @@ public final class CulpritGameTests {
             helper.assertBlockPresent(Blocks.AIR, 7, 1, 7);
             helper.succeed();
         });
+
+        ScanTests.register();
     }
 
     private CulpritGameTests() {}

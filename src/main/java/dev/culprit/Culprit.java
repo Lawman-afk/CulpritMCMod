@@ -4,7 +4,9 @@ import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
 
+import dev.culprit.command.CulpritCommand;
 import dev.culprit.gametest.CulpritGameTests;
+import dev.culprit.scan.TickScan;
 import net.minecraft.resources.Identifier;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -21,6 +23,8 @@ public class Culprit {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public Culprit(IEventBus modBus, ModContainer modContainer) {
+        TickScan.register();
+        CulpritCommand.register();
         CulpritGameTests.register(modBus);
     }
 
