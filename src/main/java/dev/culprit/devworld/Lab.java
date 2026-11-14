@@ -78,13 +78,13 @@ public final class Lab {
     /** Ticks for the world to come in and the machines to get going before the scan, and between pictures. */
     private static final int SETTLE = 200, EACH = 40, SCAN_TICKS = 200;
     /** What a view shows besides the world, when not a results tab (0 and up): nothing, the scan menu, the menu with a scan just started from it, the chat. */
-    private static final int NO_SCREEN = -1, SCAN_MENU = -2, SCAN_RUNNING = -3, CHAT = -4, LOOK = -5;
+    private static final int NO_SCREEN = -1, SCAN_MENU = -2, SCAN_RUNNING = -3, CHAT = -4, LOOK = -5, HUD = -6;
 
     /** A picture: its name, where it is taken from and which way it looks, and what is on screen. */
     /** A picture: where from and which way, what is on screen, and which section of the results (0 ticks, 1 frames, 2 chunks). */
     private record View(String name, Vec3 at, float yaw, float pitch, int screenTab, boolean mark, String search, boolean spikes, int section) {}
 
-    private static boolean worldMade, built, scanned, hudWanted, framesScanned, framesChecked;
+    private static boolean worldMade, built, scanned, hudWanted, framesScanned, framesChecked, saved;
     private static int waited, shot;
     private static List<View> views = List.of();
     private static Vec3 spawn = Vec3.ZERO;
@@ -152,13 +152,19 @@ public final class Lab {
             framesChecked = true;
             StringBuilder never = new StringBuilder();
             for (int p = 0; p < Math.min(dev.culprit.scan.FramePhase.COUNT, frames.phaseNs.length); p++) {
-                if (frames.phaseNs[p] == 0) {
+                if (frames.phaseNs[p] == 0 && (p != dev.culprit.scan.FramePhase.SHADOWS || net.neoforged.fml.ModList.get().isLoaded("iris"))
+                        && (p != dev.culprit.scan.FramePhase.FAR_TERRAIN || net.neoforged.fml.ModList.get().isLoaded("distanthorizons"))) {
                     never.append(' ').append(dev.culprit.scan.FramePhase.key(p));
                 }
             }
             Culprit.LOGGER.info("Lab: frame scan: {} frames, {} ns a frame; entities {} ns, block entities {} ns; parts {}; never timed:{}",
                     frames.ticks, frames.perTick(frames.tickNsTotal), frames.perTick(frames.kindNs[Kind.ENTITY]),
                     frames.perTick(frames.kindNs[Kind.BLOCK_ENTITY]), java.util.Arrays.toString(frames.phaseNs), never.length() == 0 ? " none" : never);
+        }
+        if (!saved && framesChecked && ClientReport.data() != null) {
+            // The results screen's Save report, as a player would press it: the tick scan's report as files.
+            saved = true;
+            Culprit.LOGGER.info("Lab: report saved: {}", ClientReport.saveReport());
         }
         if (mc.gui.hud.isHidden() == hudWanted) {
             mc.gui.hud.toggle();                                   // no hand, hotbar or chat in the pictures, but the chat's
@@ -179,7 +185,8 @@ public final class Lab {
             if (v.mark()) {
                 Overlay.markThing(farthestCostly(report, mc));
             }
-            hudWanted = v.screenTab() == CHAT || v.screenTab() == LOOK;    // the readout under the crosshair is on the HUD
+            hudWanted = v.screenTab() == CHAT || v.screenTab() == LOOK || v.screenTab() == HUD;   // the readout and line are on the HUD
+            dev.culprit.config.CulpritClientConfig.HUD_LINE.set(v.screenTab() == HUD);   // (for that picture only, not saved)
             Overlay.setShown(true);                                // as the results screen's button does
             int shownSection = ClientReport.chunksShown() ? 2 : ClientReport.framesShown() ? 1 : 0;
             if (shownSection != v.section()) {
@@ -396,6 +403,7 @@ public final class Lab {
         list.add(eye("scan_menu", 1.5, y + 1.6, 2.5, 180f, 10f, SCAN_MENU, false));
         list.add(eye("scan_running", 1.5, y + 1.6, 2.5, 180f, 10f, SCAN_RUNNING, false));
         list.add(eye("chat", 1.5, y + 1.6, 2.5, 180f, 10f, CHAT, false));
+        list.add(eye("hud_line", 1.5, y + 1.6, 2.5, 180f, 10f, HUD, false));
         views = list;
         Culprit.LOGGER.info("Lab: lag sources set out round the spawn at y {}", y);
     }

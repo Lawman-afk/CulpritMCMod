@@ -94,6 +94,33 @@ public final class CulpritNetwork {
         }
     }
 
+    /** Client to server: send the HUD line's numbers once a second (true), or stop (false). */
+    public record LoadRequest(boolean on) implements CustomPacketPayload {
+        public static final Type<LoadRequest> TYPE = new Type<>(Culprit.id("load_request"));
+        public static final StreamCodec<FriendlyByteBuf, LoadRequest> CODEC = StreamCodec.of(
+                (FriendlyByteBuf buf, LoadRequest p) -> buf.writeBoolean(p.on), buf -> new LoadRequest(buf.readBoolean()));
+
+        @Override
+        public Type<LoadRequest> type() {
+            return TYPE;
+        }
+    }
+
+    /** Server to client: the server's average time a tick and ticks a second, for the HUD line. */
+    public record Load(long tickNs, float tps) implements CustomPacketPayload {
+        public static final Type<Load> TYPE = new Type<>(Culprit.id("load"));
+        public static final StreamCodec<FriendlyByteBuf, Load> CODEC = StreamCodec.of(
+                (FriendlyByteBuf buf, Load p) -> {
+                    buf.writeVarLong(p.tickNs);
+                    buf.writeFloat(p.tps);
+                }, buf -> new Load(buf.readVarLong(), buf.readFloat()));
+
+        @Override
+        public Type<Load> type() {
+            return TYPE;
+        }
+    }
+
     private CulpritNetwork() {}
 
     public static void register(IEventBus modBus) {
@@ -107,6 +134,12 @@ public final class CulpritNetwork {
         registrar.playToServer(ScanRequest.TYPE, ScanRequest.CODEC, CulpritNetwork::scanRequest);
         registrar.playToServer(ChunksRequest.TYPE, ChunksRequest.CODEC, CulpritNetwork::chunksRequest);
         registrar.playToClient(ChunksReport.TYPE, ChunksReport.CODEC);
+        registrar.playToServer(LoadRequest.TYPE, LoadRequest.CODEC, (request, context) -> {
+            if (context.player() instanceof ServerPlayer player) {
+                LoadSender.asked(player, request.on());
+            }
+        });
+        registrar.playToClient(Load.TYPE, Load.CODEC);
     }
 
     /** Whether a player may start and stop scans: the server's setting (operators by default), as the commands. */

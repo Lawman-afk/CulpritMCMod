@@ -1,5 +1,6 @@
 package dev.culprit.client;
 
+import dev.culprit.report.Names;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -58,9 +59,9 @@ import net.neoforged.neoforge.common.NeoForge;
  */
 public final class Overlay {
     /** How far from the camera things are boxed, and labelled; chunks within this many chunks get their outline. */
-    private static final double RANGE = 64, LABEL_RANGE = 32;
+    private static final double LABEL_RANGE = 32;
     private static final int TILE_CHUNKS = 6;
-    private static final int MAX_BOXES = 300, MAX_LABELS = 12, MAX_CHUNK_LABELS = 5, MAX_TILES = 169;
+    private static final int MAX_BOXES = 300, MAX_LABELS = 30, MAX_CHUNK_LABELS = 5, MAX_TILES = 169;
     /** At most this many things a frame are checked for being in sight before their label. */
     private static final int MAX_SIGHT_CHECKS = 48;
     /** Things cheaper than this a tick are not boxed (signs and other near-free tickers). */
@@ -129,7 +130,11 @@ public final class Overlay {
 
     public static void setShown(boolean on) {
         shown = on;
+        shownAtMillis = System.currentTimeMillis();
     }
+
+    /** When the results were last shown on the world (they may hide themselves after the minutes the settings say). */
+    private static long shownAtMillis;
 
     static void newReport(@Nullable ReportData r) {
         report = r;
@@ -168,6 +173,10 @@ public final class Overlay {
     }
 
     private static void draw(RenderLevelStageEvent.AfterLevel event) {
+        int minutes = dev.culprit.config.CulpritClientConfig.hideAfterMinutes();
+        if (shown && minutes > 0 && System.currentTimeMillis() - shownAtMillis > minutes * 60_000L) {
+            shown = false;                                      // (the player's setting: hidden after a while)
+        }
         lookThing = lookBox = -1;
         chunkMode = false;
         if (ClientReport.chunksShown()) {
@@ -199,7 +208,7 @@ public final class Overlay {
     /** This frame's boxes, chunk outlines and beam, costliest first, near the camera. */
     private static void gather(ReportData r, int dim, ClientLevel level, Vec3 cam) {
         boxes = 0;
-        double range2 = RANGE * RANGE;
+        double range = dev.culprit.config.CulpritClientConfig.range(), range2 = range * range;
         int looked = -1, lookedBox = -1;
         double lookedAt = Double.MAX_VALUE;
         for (int i = 0; i < r.things && boxes < MAX_BOXES; i++) {
@@ -372,7 +381,7 @@ public final class Overlay {
 
     /** How far along the crosshair's ray it enters a box, or -1 when it misses (or the box is out of range). */
     private static double rayHit(AABB b, Vec3 o) {
-        double near = 0, far = RANGE;
+        double near = 0, far = dev.culprit.config.CulpritClientConfig.range();
         double[] lo = {b.minX - o.x, b.minY - o.y, b.minZ - o.z}, hi = {b.maxX - o.x, b.maxY - o.y, b.maxZ - o.z};
         float[] d = {FORWARD.x, FORWARD.y, FORWARD.z};
         for (int a = 0; a < 3; a++) {
@@ -510,9 +519,9 @@ public final class Overlay {
             label(font, cam, facing, markedPos.getX() + 0.5, markedPos.getY() + 1.7, markedPos.getZ() + 0.5,
                     Component.literal(markedLabel).getVisualOrderText(), null, Font.DisplayMode.SEE_THROUGH, true);
         }
-        int things = 0, checked = 0;
+        int things = 0, checked = 0, labels = Math.min(MAX_LABELS, dev.culprit.config.CulpritClientConfig.labels());
         double range2 = LABEL_RANGE * LABEL_RANGE;
-        for (int i = 0; i < r.things && things < MAX_LABELS; i++) {
+        for (int i = 0; i < r.things && things < labels; i++) {
             if (r.dim[i] != dim || Kind.isChunkWide(r.kind[i]) || i == markedThing || i == lookThing || isViewer(r, i)) {
                 continue;
             }

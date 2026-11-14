@@ -13,6 +13,12 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
  */
 public final class CulpritMixinPlugin implements IMixinConfigPlugin {
     private static final boolean NO_HOOKS = Boolean.getBoolean("culprit.noHooks");
+    /**
+     * The hooks into other mods (DESIGN §6), each applied only when that mod is installed: without it, the game would
+     * still start (they are optional) but log a warning for each class it looked for.
+     */
+    private static final java.util.Map<String, String> NEEDS = java.util.Map.of("SodiumFrameMixin", "sodium", "SodiumChunksFrameMixin", "sodium",
+            "IrisShadowFrameMixin", "iris", "DistantHorizonsFrameMixin", "distanthorizons");
 
     @Override
     public void onLoad(String mixinPackage) {}
@@ -24,7 +30,20 @@ public final class CulpritMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        String needs = NEEDS.get(mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1));
+        if (needs != null && !installed(needs)) {
+            return false;
+        }
         return !(NO_HOOKS && !mixinClassName.endsWith(".DevMouseMixin"));   // every tick hook out, for the comparison
+    }
+
+    private static boolean installed(String modId) {
+        try {
+            var mods = net.neoforged.fml.loading.LoadingModList.get();
+            return mods == null || mods.getModFileById(modId) != null;
+        } catch (RuntimeException | LinkageError e) {
+            return true;                                        // (cannot tell: the optional hook looks for itself)
+        }
     }
 
     @Override

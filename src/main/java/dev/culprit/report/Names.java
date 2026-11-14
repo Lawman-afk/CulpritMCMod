@@ -1,4 +1,4 @@
-package dev.culprit.client;
+package dev.culprit.report;
 
 import java.util.HashMap;
 import java.util.Locale;
@@ -23,7 +23,7 @@ public final class Names {
 
     private Names() {}
 
-    static void clear() {
+    public static void clear() {
         CACHE.clear();
     }
 

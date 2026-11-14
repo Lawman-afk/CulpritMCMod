@@ -85,7 +85,14 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
   Things, Types, Mods, Chunks) and on the world; the stutters (frames over twice the usual one and at least 20 ms)
   beside the averages, as the lag spikes are for ticks. Particles by kind and chunk (each particle's move and making
   ready; its type kept from when it was made). The sorting and the drawing of the handed-in parts shared out to the
-  entities and block entities by the parts each handed in (§5.3). Not yet: Iris's shadow pass.
+  entities and block entities by the parts each handed in (§5.3).
+- **With Sodium and Iris (2026-11-15, Sodium 0.9.3 and Iris 1.11.7 for 26.3)**: Sodium gathers the block entities in
+  view itself (`SodiumWorldRenderer.extractBlockEntity`, in place of the game's loop) and builds chunk meshes its own
+  way (`RenderSectionManager.updateChunks`, `processChunkBuilds`): both timed as the game's are, so block entities and
+  "building chunk meshes" are measured with it too. Iris's shadow pass (`ShadowRenderer.renderShadows`) is its own part
+  of the frame, "Shader shadows"; the entities and block entities it gathers and hands in for the shadows are charged
+  to them, as in the main pass, and the parts it hands in are drawn and shared out with the rest. In the Lab under
+  Complementary: shader shadows 1.12 ms a frame, every part timed, the results drawn over the pack untouched.
 
 ### 4.3 Chunk inspector
 
@@ -149,6 +156,10 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
 ### 4.5 HUD line (optional)
 
 - The server's TPS and MSPT (when permitted), the client's FPS and frame time.
+- **Built (2026-11-15)**: off by default; on from the settings or a key (none set at first). "TPS 20.0  MSPT 3.8  FPS 60
+  (16.7 ms)" in a corner (top left by default), the numbers green, yellow or red. A world of one's own is read directly;
+  another server sends its average tick and ticks a second once a second to a player who asked and may scan there
+  (nothing is sent while no one asks). Hidden with the HUD (F1) and under the debug screen (F3).
 
 ### 4.6 Later, not in the first release
 
@@ -214,12 +225,19 @@ fine (§2).
 - Server: who may scan (operator level 2 by default), who may view results, who may teleport, the longest scan, the
   largest result.
 - Client: the colour scale, labels, through walls, how long the overlay stays, the HUD line.
+- **Built (2026-11-15)**: the player's own settings (config/culprit-client.toml, and Config in the mod list, NeoForge's
+  own screen): how far things are boxed (16 to 128 blocks, 64), how many are labelled (0 to 30, 12), minutes after which
+  the results hide themselves (0, never), the HUD line and its corner. The server's (who may scan, the longest scan) show
+  on the same screen in one's own world. Left out: a second colour scale (the one there reads for colour-blind players),
+  boxes through walls (the game's line and quad kinds all test depth; the picked thing's beam and label already show
+  through), and separate permissions to view or teleport (results go only to who scanned; teleporting uses /tp's own).
 
 ## 6. Compatibility
 
-Sodium and Embeddium (their render loops call the dispatchers measured); Iris and Oculus (the overlay drawn after the
-world, checked under shader packs; the shadow pass counted apart); Distant Horizons (its far terrain is not measured,
-and the results say so); Create (contraptions are entities, kinetic machines are block entities; what Flywheel draws by
+Sodium and Embeddium (their render loops call the dispatchers measured; on 26.3 Sodium's own block-entity gathering
+and chunk-mesh work are hooked, §4.2); Iris and Oculus (the overlay drawn after the world, checked under shader packs;
+the shadow pass counted apart, §4.2); Distant Horizons (its far terrain, drawn and faded in, is its own part of the
+frame, "Distant Horizons": DH 3.3.4's `ClientApi` render calls, 2026-11-15); Create (contraptions are entities, kinetic machines are block entities; what Flywheel draws by
 instancing is outside the renderers and is shown as such); Lithium (block entities it puts to sleep do not tick and so
 cost nothing); ModernFix.
 
@@ -229,8 +247,8 @@ cost nothing); ModernFix.
   the dev runs; the scan itself only measures what is in a player's world and adds nothing to it. Built: hoppers,
   pigs, an observer clock and a piston each found at its place with its kind, type and mod, every total checked
   against the others and the tick's parts against the tick; nested time; passengers; random ticks (a field of grass
-  with the random tick speed raised); the commands; the idle cost (`-Pbench`). To come: a forced chunk named by the
-  ticket inspector.
+  with the random tick speed raised); the commands and the report files; the idle cost (`-Pbench`); every kind of chunk loader named
+  (a forced chunk by the command and by code, a block's and a team's loader, a passing request).
 - **The prepared world "Culprit Lab"** (a dev-only run, never in the jar): a wall of hoppers, a mob crowd, item piles,
   a redstone clock, a forest of signs and banners (frames), item frames with maps, armour stands, a beacon, a
   force-loaded chunk far away, a portal; signs saying what to try. Photographers take the overlay's pictures.
@@ -261,3 +279,6 @@ cost nothing); ModernFix.
 | 2026-11-14 | The chunk inspector built on 26.3 ("continue with your plans"): a chunk's reason is its strongest loading ticket's (level plus distance), a player's taken last on a tie (a player's surroundings are expected to be loaded; a mod's or a forced chunk is what stays when everyone leaves); a loader is listed with every chunk it keeps playable, not only those it is strongest for. NeoForge's chunk-loader owners are read through the world's save codec rather than its private trackers (public, and what the world itself writes). Sent on request (operators, as scans), at most 40,000 chunks. |
 | 2026-11-14 | The user asked whether the inspector accounts for modded chunk loaders "of any type". Every loading ticket was already read, so every loader was counted; two kinds were named wrongly. A loader owned by an id that is no entity (FTB Chunks keeps a team's claims under the team's id, which we checked in its source) read "an entity not loaded"; it is now named as the player or team. A mod forcing a chunk the game's own way read "/forceload"; a record of each change, kept with the world, now says who ran /forceload or which mod's code asked. The mod is found from the stack, by the first class that is not the game's, found in the mod files: dependable, and paid only when a chunk is forced. Both hooks are optional (`require = 0`), like the frame hooks. Mods are named as they name themselves, blocks and entities as the game does. |
 | 2026-11-15 | Passing requests named and put in their place (the user said yes to it, then "continue your development plan"). In the Lab, 287 of a player's chunks read "passing requests": something reads them every tick, and on a tie of strength a passing request won over the player. Now a passing request is taken last and dropped wherever anything else holds the chunk; where it is all a chunk has, the code that made the request load it is named. The request that has to load a chunk is the only one walked, so reading loaded chunks costs nothing more. The stack walk is shared with the forced-chunk record. |
+| 2026-11-15 | The frame scan with Sodium and Iris (the plan's next step). Sodium on 26.3 replaces the game's block-entity gathering and chunk-mesh building, so the frame scan saw no block entities with it: its own methods are hooked the same way, by name, only when Sodium is there (`@Pseudo`, optional). Iris's shadow pass becomes its own part, "Shader shadows", and what each thing costs for its shadow is the thing's, since a mob's shadow is drawn because of the mob. Hooks into other mods are written against the game's types only (their own classes are named as strings), so Culprit needs neither mod to build or run. |
+| 2026-11-15 | Settings and the HUD line (the plan's next step). The player's settings are the ones that change what they see: range, labels, hiding after a while, the HUD line. NeoForge's own config screen shows them, with no screen of our own to keep. The HUD line reads one's own world directly and asks any other server, which sends only to players who asked and may scan, once a second. Distant Horizons' far terrain is its own part of the frame (it had been counted as drawing the terrain: 1.42 ms of the Lab's frame with DH against 0.19 ms without). The hooks into other mods are now applied only when the mod is installed, so a game without them logs no warnings. |
+| 2026-11-15 | Reports as files (§4.4): a Markdown page to read and paste where a pack's makers will see it, and JSON for tools, both made from the report as the client holds it, so the server's `/culprit export` and the results screen's Save report write the same thing (the page names things as the game does, in English on a server). The name-giving and the parts of the tick or frame moved from the client to a common package for it. |

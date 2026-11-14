@@ -1,5 +1,6 @@
 package dev.culprit.client;
 
+import dev.culprit.report.Names;
 import org.jspecify.annotations.Nullable;
 
 import dev.culprit.command.ReportText;
@@ -255,6 +256,27 @@ public final class ClientReport {
     /** "[Culprit] " in gold, as the first part of a line whose other parts keep their own colours. */
     private static MutableComponent tag() {
         return Component.empty().append(Component.literal("[Culprit] ").withStyle(ChatFormatting.GOLD));
+    }
+
+    /** Saves the scan shown as files (DESIGN §4.4) and says where, the name a click that opens the folder. */
+    public static boolean saveReport() {
+        ReportData d = base();
+        if (d == null) {
+            return false;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        try {
+            java.nio.file.Path file = dev.culprit.report.ReportFile.write(d, mc.gameDirectory.toPath());
+            Component name = Component.literal(file.getFileName().toString()).withStyle(s -> s.withUnderlined(true)
+                    .withClickEvent(new net.minecraft.network.chat.ClickEvent.OpenFile(file.getParent().toString())));
+            say(tag().append(Component.translatableWithFallback("culprit.chat.saved", "Saved the report: %s (and the same as .json).", name)));
+            return true;
+        } catch (java.io.IOException | RuntimeException e) {
+            dev.culprit.Culprit.LOGGER.warn("Culprit: could not save the report", e);
+            say(tag().append(Component.translatableWithFallback("culprit.chat.save_failed", "Could not save the report: %s",
+                    String.valueOf(e.getMessage()))));
+            return false;
+        }
     }
 
     private static void say(Component message) {

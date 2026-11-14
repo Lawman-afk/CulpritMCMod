@@ -1,5 +1,7 @@
 package dev.culprit.client;
 
+import dev.culprit.report.Names;
+import dev.culprit.report.Breakdown;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -168,7 +170,7 @@ public final class CulpritScreen extends Screen {
         panel.search(query);
         Component[] labels = {layoutChunks ? (layoutChunkData == null ? tr("look", "Look now") : tr("look_again", "Look again"))
                 : tr("new_scan", "New scan (%s)", CulpritKeys.SCAN.getTranslatedKeyMessage()), overlayLabel(),
-                tr("teleport", "Teleport there"), tr("done", "Done")};
+                tr("teleport", "Teleport there"), tr("save", "Save report"), tr("done", "Done")};
         int[] widths = new int[labels.length];
         int sum = 0;
         for (int i = 0; i < labels.length; i++) {
@@ -186,6 +188,9 @@ public final class CulpritScreen extends Screen {
         }
         overlay = made[1];
         teleport = made[2];
+        made[3].active = !layoutChunks && layoutData != null;    // (a scan's report; the loaded chunks are looked at, not saved)
+        made[3].setTooltip(net.minecraft.client.gui.components.Tooltip.create(tr("save.about",
+                "Saves this scan as a page to read (Markdown) and as JSON, in the game folder's culprit/reports, to share.")));
         refreshTabs();
         tick();
     }
@@ -204,6 +209,11 @@ public final class CulpritScreen extends Screen {
                 button.setMessage(overlayLabel());
             }
             case 2 -> teleport();
+            case 3 -> {
+                if (ClientReport.saveReport()) {
+                    button.active = false;                      // (saved; a new scan or view makes the button anew)
+                }
+            }
             default -> onClose();
         }
     }

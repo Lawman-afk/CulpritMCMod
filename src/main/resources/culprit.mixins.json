@@ -25,7 +25,11 @@
     "ParticleFrameMixin",
     "QuadParticleFrameMixin",
     "SubmitNodeFrameMixin",
-    "PreparedFrameMixin"
+    "PreparedFrameMixin",
+    "SodiumFrameMixin",
+    "SodiumChunksFrameMixin",
+    "IrisShadowFrameMixin",
+    "DistantHorizonsFrameMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -45,7 +45,28 @@ public final class CulpritCommand {
                     c.getSource().sendSuccess(() -> dev.culprit.chunks.ChunkText.summary(data), false);
                     return data.dims.stream().mapToInt(d -> d.total).sum();
                 }))
+                .then(Commands.literal("export").executes(CulpritCommand::export))
                 .then(top));
+    }
+
+    /** The last tick scan's report as files on the server (DESIGN §4.4): a Markdown page and JSON, in culprit/reports. */
+    private static int export(CommandContext<CommandSourceStack> c) {
+        CommandSourceStack source = c.getSource();
+        ScanReport r = TickScan.last();
+        if (r == null) {
+            source.sendFailure(ReportText.tr("scan.none", "No scan yet: run /culprit scan first."));
+            return 0;
+        }
+        try {
+            java.nio.file.Path file = dev.culprit.report.ReportFile.write(dev.culprit.net.ReportData.of(r), source.getServer().getServerDirectory());
+            java.nio.file.Path shown = source.getServer().getServerDirectory().relativize(file);
+            source.sendSuccess(() -> ReportText.tr("export.saved", "Saved the report: %s (and the same as .json).", shown.toString()), false);
+            return 1;
+        } catch (java.io.IOException | RuntimeException e) {
+            dev.culprit.Culprit.LOGGER.warn("Culprit: could not save the report", e);
+            source.sendFailure(ReportText.tr("export.failed", "Could not save the report: %s", String.valueOf(e.getMessage())));
+            return 0;
+        }
     }
 
     private static int scan(CommandContext<CommandSourceStack> c, int asked) {

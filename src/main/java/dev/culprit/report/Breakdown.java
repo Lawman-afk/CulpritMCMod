@@ -1,4 +1,4 @@
-package dev.culprit.client;
+package dev.culprit.report;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -95,6 +95,9 @@ public final class Breakdown {
                 Component.translatableWithFallback("culprit.frame.about.particle_kinds", "each kind, moved and made ready"),
                 d.kindNs[Kind.PARTICLE], F_WORLD));
         for (int p = 0; p < Math.min(FramePhase.COUNT, d.phaseNs.length); p++) {
+            if ((p == FramePhase.SHADOWS || p == FramePhase.FAR_TERRAIN) && d.phaseNs[p] == 0) {
+                continue;                                       // (no shader pack with shadows, no Distant Horizons: no such part)
+            }
             int group = switch (p) {
                 case FramePhase.CLIENT_TICK, FramePhase.PACKETS -> F_CLIENT;
                 case FramePhase.GUI, FramePhase.MOD_EVENTS -> F_SCREEN;

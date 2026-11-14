@@ -13,6 +13,7 @@ public final class ClientNetwork {
             event.register(CulpritNetwork.Report.TYPE, (payload, context) -> ClientReport.receive(payload.data()));
             event.register(CulpritNetwork.Status.TYPE, (payload, context) -> ClientReport.status(payload.state(), payload.ticks()));
             event.register(CulpritNetwork.ChunksReport.TYPE, (payload, context) -> ClientReport.receiveChunks(payload.data()));
+            event.register(CulpritNetwork.Load.TYPE, (payload, context) -> HudLine.received(payload.tickNs(), payload.tps()));
         });
     }
 }

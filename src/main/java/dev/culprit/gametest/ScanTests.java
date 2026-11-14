@@ -200,6 +200,25 @@ final class ScanTests {
                         said.clear();
                         server.getCommands().performPrefixedCommand(source, "culprit top types 3");
                         helper.assertTrue(said.size() >= 2 && said.getFirst().contains("costliest types"), "/culprit top types prints a header and lines: " + said);
+                        // The report as files: a Markdown page naming the hopper among the costliest, and the same as JSON.
+                        said.clear();
+                        server.getCommands().performPrefixedCommand(source, "culprit export");
+                        helper.assertTrue(!said.isEmpty() && said.getFirst().startsWith("Saved the report: "), "/culprit export says where: " + said);
+                        try {
+                            java.nio.file.Path md = server.getServerDirectory().resolve(said.getFirst().substring("Saved the report: ".length())
+                                    .replace(" (and the same as .json).", ""));
+                            String page = java.nio.file.Files.readString(md);
+                            String json = java.nio.file.Files.readString(md.resolveSibling(md.getFileName().toString().replace(".md", ".json")));
+                            helper.assertTrue(page.startsWith("# Culprit report: server ticks") && page.contains("| Hopper |")
+                                    && page.contains("## Where the time went"), "the page has the summary, the parts and the hopper");
+                            com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+                            helper.assertTrue(o.get("of").getAsString().equals("ticks") && o.getAsJsonArray("things").size() > 0
+                                    && o.getAsJsonArray("parts").size() > 0, "the JSON has the things and the parts");
+                            java.nio.file.Files.deleteIfExists(md);
+                            java.nio.file.Files.deleteIfExists(md.resolveSibling(md.getFileName().toString().replace(".md", ".json")));
+                        } catch (java.io.IOException e) {
+                            throw new RuntimeException(e);
+                        }
                         helper.succeed();
                     });
                 });

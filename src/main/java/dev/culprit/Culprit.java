@@ -28,6 +28,7 @@ public class Culprit {
         TickScan.register();
         CulpritCommand.register();
         CulpritNetwork.register(modBus);
+        dev.culprit.net.LoadSender.register();             // the HUD line's numbers, for players who ask
     }
 
     public static Identifier id(String path) {
