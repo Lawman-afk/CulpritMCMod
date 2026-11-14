@@ -3,18 +3,28 @@ package dev.culprit.config;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * A player's own settings for Culprit (DESIGN §5.5): how the results show on the world, and the HUD line. Changed in
- * the game's mod list (Config) or in config/culprit-client.toml.
+ * A player's own settings for Culprit (DESIGN §5.5): how the results show on the world, and the HUD line, on one page
+ * (few enough to need no sections). Changed in the game's mod list (Config) or in config/culprit-client.toml.
  */
 public final class CulpritClientConfig {
-    /** Where the HUD line sits. */
-    public enum Corner { TOP_LEFT, TOP_RIGHT }
+    /** Where the HUD line sits (named in words on the settings page). */
+    public enum Corner implements net.neoforged.neoforge.common.TranslatableEnum {
+        TOP_LEFT("Top left"), TOP_RIGHT("Top right");
+
+        private final String english;
+
+        Corner(String english) {
+            this.english = english;
+        }
+
+        @Override
+        public net.minecraft.network.chat.Component getTranslatedName() {
+            return net.minecraft.network.chat.Component.translatableWithFallback("culprit.configuration.hudCorner."
+                    + name().toLowerCase(java.util.Locale.ROOT), english);
+        }
+    }
 
     private static final ModConfigSpec.Builder B = new ModConfigSpec.Builder();
-
-    static {
-        B.comment("The results on the world (shown from the results screen).").translation("culprit.configuration.world").push("world");
-    }
 
     public static final ModConfigSpec.IntValue RANGE = B
             .comment("How far from you things are boxed, in blocks.")
@@ -32,24 +42,16 @@ public final class CulpritClientConfig {
             .translation("culprit.configuration.hideAfterMinutes")
             .defineInRange("hideAfterMinutes", 0, 0, 120);
 
-    static {
-        B.pop().comment("The HUD line: the server's ticks and your frames, always on screen.").translation("culprit.configuration.hud").push("hud");
-    }
-
     public static final ModConfigSpec.BooleanValue HUD_LINE = B
             .comment("Show the server's ticks a second and time a tick (on a server, when you may scan there) and your frames a",
                     "second and time a frame in a line on screen. A key in Controls turns it on and off (none set at first).")
             .translation("culprit.configuration.hudLine")
-            .define("line", false);
+            .define("hudLine", false);
 
     public static final ModConfigSpec.EnumValue<Corner> HUD_CORNER = B
             .comment("Which corner of the screen the HUD line sits in.")
             .translation("culprit.configuration.hudCorner")
-            .defineEnum("corner", Corner.TOP_LEFT);
-
-    static {
-        B.pop();
-    }
+            .defineEnum("hudCorner", Corner.TOP_LEFT);
 
     public static final ModConfigSpec SPEC = B.build();
 

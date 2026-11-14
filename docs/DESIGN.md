@@ -226,7 +226,7 @@ fine (§2).
   largest result.
 - Client: the colour scale, labels, through walls, how long the overlay stays, the HUD line.
 - **Built (2026-11-15)**: the player's own settings (config/culprit-client.toml, and Config in the mod list, NeoForge's
-  own screen): how far things are boxed (16 to 128 blocks, 64), how many are labelled (0 to 30, 12), minutes after which
+  own screen, one page): how far things are boxed (16 to 128 blocks, 64), how many are labelled (0 to 30, 12), minutes after which
   the results hide themselves (0, never), the HUD line and its corner. The server's (who may scan, the longest scan) show
   on the same screen in one's own world. Left out: a second colour scale (the one there reads for colour-blind players),
   boxes through walls (the game's line and quad kinds all test depth; the picked thing's beam and label already show

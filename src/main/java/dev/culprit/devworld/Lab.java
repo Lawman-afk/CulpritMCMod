@@ -78,7 +78,7 @@ public final class Lab {
     /** Ticks for the world to come in and the machines to get going before the scan, and between pictures. */
     private static final int SETTLE = 200, EACH = 40, SCAN_TICKS = 200;
     /** What a view shows besides the world, when not a results tab (0 and up): nothing, the scan menu, the menu with a scan just started from it, the chat. */
-    private static final int NO_SCREEN = -1, SCAN_MENU = -2, SCAN_RUNNING = -3, CHAT = -4, LOOK = -5, HUD = -6;
+    private static final int NO_SCREEN = -1, SCAN_MENU = -2, SCAN_RUNNING = -3, CHAT = -4, LOOK = -5, HUD = -6, SETTINGS = -7;
 
     /** A picture: its name, where it is taken from and which way it looks, and what is on screen. */
     /** A picture: where from and which way, what is on screen, and which section of the results (0 ticks, 1 frames, 2 chunks). */
@@ -213,6 +213,12 @@ public final class Lab {
                 mc.gui.setScreen(new ScanScreen());
             } else if (v.screenTab() == CHAT) {
                 mc.gui.setScreen(new ChatScreen("", false));
+            } else if (v.screenTab() == SETTINGS) {
+                // The player's settings, as Config in the mod list opens them (the client file's page).
+                var config = net.neoforged.fml.config.ModConfigs.getModConfigs(Culprit.MODID).stream()
+                        .filter(c -> c.getType() == net.neoforged.fml.config.ModConfig.Type.CLIENT).findFirst().orElseThrow();
+                mc.gui.setScreen(new net.neoforged.neoforge.client.gui.ConfigurationScreen.ConfigurationSectionScreen(null, config.getType(), config,
+                        net.minecraft.network.chat.Component.literal("Culprit: your settings")));
             } else if (mc.gui.screen() != null) {
                 mc.gui.setScreen(null);
             }
@@ -404,6 +410,7 @@ public final class Lab {
         list.add(eye("scan_running", 1.5, y + 1.6, 2.5, 180f, 10f, SCAN_RUNNING, false));
         list.add(eye("chat", 1.5, y + 1.6, 2.5, 180f, 10f, CHAT, false));
         list.add(eye("hud_line", 1.5, y + 1.6, 2.5, 180f, 10f, HUD, false));
+        list.add(eye("settings", 1.5, y + 1.6, 2.5, 180f, 10f, SETTINGS, false));
         views = list;
         Culprit.LOGGER.info("Lab: lag sources set out round the spawn at y {}", y);
     }
