@@ -87,6 +87,11 @@ public final class Overlay {
     // This frame's chunk outlines: the four corners' x, y, z relative to the camera, and heat.
     private static final float[] TILE = new float[MAX_TILES * 12];
     private static final float[] TILE_HEAT = new float[MAX_TILES];
+    // In the loaded chunks' view: each outline's colour and width, instead of the heat's.
+    private static final int[] TILE_COLOUR = new int[MAX_TILES];
+    private static final float[] TILE_WIDTH = new float[MAX_TILES];
+    private static boolean chunkMode;
+    private static java.util.@Nullable List<Integer> markedLoader;
     private static int tiles;
     // The mark's beam: x, z (relative), y0, y1.
     private static boolean beam;
@@ -157,8 +162,18 @@ public final class Overlay {
         markedLabel = label;
     }
 
+    /** Marks the chunks a loader keeps loaded (its sources, from the results' Loaded chunks section), or none. */
+    public static void markLoader(java.util.@Nullable List<Integer> sources) {
+        markedLoader = sources;
+    }
+
     private static void draw(RenderLevelStageEvent.AfterLevel event) {
         lookThing = lookBox = -1;
+        chunkMode = false;
+        if (ClientReport.chunksShown()) {
+            drawChunks(event);
+            return;
+        }
         ReportData r = report;
         Minecraft mc = Minecraft.getInstance();
         if (!shown || r == null || mc.level == null || mc.player == null) {
@@ -272,6 +287,88 @@ public final class Overlay {
         }
     }
 
+    /**
+     * The loaded chunks' view: each loaded chunk near the camera outlined on the ground in its reason's colour (brighter
+     * the busier it is), the chunks of the loader picked in the results thick and white, and the loaders that are not
+     * players named over their chunks.
+     */
+    private static void drawChunks(RenderLevelStageEvent.AfterLevel event) {
+        Minecraft mc = Minecraft.getInstance();
+        dev.culprit.net.ChunkData data = ClientReport.chunksData();
+        if (!shown || data == null || mc.level == null) {
+            return;
+        }
+        String here = mc.level.dimension().identifier().toString();
+        dev.culprit.net.ChunkData.Dim d = data.dims.stream().filter(x -> x.dim.equals(here)).findFirst().orElse(null);
+        if (d == null) {
+            return;
+        }
+        var camera = event.getLevelRenderState().cameraRenderState;
+        Vec3 cam = camera.pos;
+        camera.orientation.transform(FORWARD.set(0, 0, -1));
+        ClientLevel level = mc.level;
+        chunkMode = true;
+        boxes = 0;
+        beam = false;
+        tiles = 0;
+        int camCx = Mth.floor(cam.x) >> 4, camCz = Mth.floor(cam.z) >> 4;
+        for (int i = 0; i < d.chunks && tiles < MAX_TILES; i++) {
+            if (Math.abs(d.x[i] - camCx) > TILE_CHUNKS || Math.abs(d.z[i] - camCz) > TILE_CHUNKS) {
+                continue;
+            }
+            int x0 = d.x[i] << 4, z0 = d.z[i] << 4;
+            int o = tiles * 12;
+            corner(level, cam, x0, z0, o);
+            corner(level, cam, x0 + 16, z0, o + 3);
+            corner(level, cam, x0 + 16, z0 + 16, o + 6);
+            corner(level, cam, x0, z0 + 16, o + 9);
+            boolean marked = false;
+            if (markedLoader != null) {
+                for (int s : markedLoader) {
+                    if (s < d.sources && Math.max(Math.abs(d.x[i] - d.sx[s]), Math.abs(d.z[i] - d.sz[s])) <= d.reach(s)) {
+                        marked = true;
+                        break;
+                    }
+                }
+            }
+            int alpha = d.status[i] == dev.culprit.net.ChunkData.ENTITY_TICKING ? 0xF0 : d.status[i] == dev.culprit.net.ChunkData.BLOCK_TICKING ? 0xB0 : 0x70;
+            TILE_COLOUR[tiles] = marked ? 0xFFFFFFFF : alpha << 24 | ChunksPanel.COLOUR[d.reason[i]];
+            TILE_WIDTH[tiles] = marked ? 4.5f : 2.5f;
+            tiles++;
+        }
+        if (tiles == 0) {
+            return;
+        }
+        STORAGE.order(0).afterTerrain.submit(new CustomFeatureRenderer.Submit(IDENTITY.last(), RenderTypes.debugQuads(), FILLS));
+        STORAGE.order(0).afterTerrain.submit(new CustomFeatureRenderer.Submit(IDENTITY.last(), RenderTypes.linesTranslucent(), LINES));
+        // The loaders that are not players, named over their chunk.
+        Font font = mc.font;
+        Quaternionf facing = camera.orientation;
+        placed = 0;
+        facing.transform(RIGHT.set(1, 0, 0));
+        facing.transform(UP.set(0, 1, 0));
+        viewTanV = Math.tan(Math.toRadians(mc.options.fov().get()) / 2) * 1.1;
+        viewTanH = viewTanV * mc.getWindow().getWidth() / Math.max(1, mc.getWindow().getHeight());
+        int named = 0;
+        for (int s = 0; s < d.sources && named < MAX_CHUNK_LABELS; s++) {
+            if (d.sreason[s] == dev.culprit.net.ChunkData.PLAYERS || d.sreason[s] == dev.culprit.net.ChunkData.OTHER
+                    || Math.abs(d.sx[s] - camCx) > TILE_CHUNKS || Math.abs(d.sz[s] - camCz) > TILE_CHUNKS) {
+                continue;
+            }
+            int x = (d.sx[s] << 4) + 8, z = (d.sz[s] << 4) + 8;
+            double y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) + 3.0;
+            if (!onScreen(x - cam.x, y - cam.y, z - cam.z)) {
+                continue;
+            }
+            Component why = dev.culprit.chunks.ChunkText.reasonName(d.sreason[s]);
+            if (label(font, cam, facing, x, y, z, Component.literal(d.sowner[s]).getVisualOrderText(),
+                    why.copy().withColor(ChunksPanel.COLOUR[d.sreason[s]]).getVisualOrderText(), Font.DisplayMode.SEE_THROUGH, false)) {
+                named++;
+            }
+        }
+        render(mc, event);
+    }
+
     /** How far along the crosshair's ray it enters a box, or -1 when it misses (or the box is out of range). */
     private static double rayHit(AABB b, Vec3 o) {
         double near = 0, far = RANGE;
@@ -359,8 +456,8 @@ public final class Overlay {
         for (int t = 0; t < tiles; t++) {
             int o = t * 12;
             float heat = TILE_HEAT[t];
-            int c = Heat.argb(heat, (int) (150 + 100 * heat));
-            float w = 2f + 2f * heat;
+            int c = chunkMode ? TILE_COLOUR[t] : Heat.argb(heat, (int) (150 + 100 * heat));
+            float w = chunkMode ? TILE_WIDTH[t] : 2f + 2f * heat;
             for (int k = 0; k < 4; k++) {
                 int a = o + k * 3, b = o + ((k + 1) % 4) * 3;
                 line(buffer, pose, TILE[a], TILE[a + 1], TILE[a + 2], TILE[b], TILE[b + 1], TILE[b + 2], c, w);
@@ -379,7 +476,7 @@ public final class Overlay {
         }
         for (int t = 0; t < tiles; t++) {
             int o = t * 12;
-            int c = Heat.argb(TILE_HEAT[t], (int) (20 + 50 * TILE_HEAT[t]));
+            int c = chunkMode ? (TILE_COLOUR[t] & 0x00FFFFFF) | ((TILE_COLOUR[t] >>> 24) / 4) << 24 : Heat.argb(TILE_HEAT[t], (int) (20 + 50 * TILE_HEAT[t]));
             quad(buffer, pose, TILE[o], TILE[o + 1], TILE[o + 2], TILE[o + 3], TILE[o + 4], TILE[o + 5], TILE[o + 6], TILE[o + 7], TILE[o + 8],
                     TILE[o + 9], TILE[o + 10], TILE[o + 11], c);
         }

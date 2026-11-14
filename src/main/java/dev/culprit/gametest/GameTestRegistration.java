@@ -18,6 +18,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Rotation;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.world.chunk.RegisterTicketControllersEvent;
+import net.neoforged.neoforge.common.world.chunk.TicketController;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
@@ -36,7 +38,17 @@ public final class GameTestRegistration {
     private static final boolean ENABLED = Arrays.asList(System.getProperty("neoforge.enabledGameTestNamespaces", "").split(","))
             .contains(Culprit.MODID);
 
+    /** A chunk loader for the tests (a mod's, as the chunk inspector sees it): "culprit:test". */
+    public static final TicketController CONTROLLER = new TicketController(Culprit.id("test"));
+
     private GameTestRegistration() {}
+
+    @SubscribeEvent
+    public static void registerControllers(RegisterTicketControllersEvent event) {
+        if (ENABLED) {
+            event.register(CONTROLLER);
+        }
+    }
 
     @SubscribeEvent
     public static void registerFunctions(RegisterEvent event) {

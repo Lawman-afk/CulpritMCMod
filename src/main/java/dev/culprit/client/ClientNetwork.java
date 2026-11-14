@@ -12,6 +12,7 @@ public final class ClientNetwork {
         modBus.addListener((RegisterClientPayloadHandlersEvent event) -> {
             event.register(CulpritNetwork.Report.TYPE, (payload, context) -> ClientReport.receive(payload.data()));
             event.register(CulpritNetwork.Status.TYPE, (payload, context) -> ClientReport.status(payload.state(), payload.ticks()));
+            event.register(CulpritNetwork.ChunksReport.TYPE, (payload, context) -> ClientReport.receiveChunks(payload.data()));
         });
     }
 }

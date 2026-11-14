@@ -70,6 +70,30 @@ public final class CulpritNetwork {
         }
     }
 
+    /** Client to server: look at the loaded chunks now (the chunk inspector). */
+    public record ChunksRequest() implements CustomPacketPayload {
+        public static final Type<ChunksRequest> TYPE = new Type<>(Culprit.id("chunks_request"));
+        public static final StreamCodec<FriendlyByteBuf, ChunksRequest> CODEC = StreamCodec.of((FriendlyByteBuf buf, ChunksRequest p) -> {
+        }, buf -> new ChunksRequest());
+
+        @Override
+        public Type<ChunksRequest> type() {
+            return TYPE;
+        }
+    }
+
+    /** Server to client: the loaded chunks, and why (the chunk inspector's findings). */
+    public record ChunksReport(ChunkData data) implements CustomPacketPayload {
+        public static final Type<ChunksReport> TYPE = new Type<>(Culprit.id("chunks_report"));
+        public static final StreamCodec<FriendlyByteBuf, ChunksReport> CODEC = StreamCodec.of(
+                (FriendlyByteBuf buf, ChunksReport p) -> p.data.write(buf), buf -> new ChunksReport(ChunkData.read(buf)));
+
+        @Override
+        public Type<ChunksReport> type() {
+            return TYPE;
+        }
+    }
+
     private CulpritNetwork() {}
 
     public static void register(IEventBus modBus) {
@@ -81,6 +105,8 @@ public final class CulpritNetwork {
         registrar.playToClient(Report.TYPE, Report.CODEC);
         registrar.playToClient(Status.TYPE, Status.CODEC);
         registrar.playToServer(ScanRequest.TYPE, ScanRequest.CODEC, CulpritNetwork::scanRequest);
+        registrar.playToServer(ChunksRequest.TYPE, ChunksRequest.CODEC, CulpritNetwork::chunksRequest);
+        registrar.playToClient(ChunksReport.TYPE, ChunksReport.CODEC);
     }
 
     /** Whether a player may start and stop scans: the server's setting (operators by default), as the commands. */
@@ -113,6 +139,19 @@ public final class CulpritNetwork {
         }
         if (TickScan.start(seconds * 20, report -> finished(player, report))) {
             status(player, Status.STARTED, seconds * 20);
+        }
+    }
+
+    private static void chunksRequest(ChunksRequest request, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player)) {
+            return;
+        }
+        if (!mayScan(player)) {
+            status(player, Status.DENIED, 0);
+            return;
+        }
+        if (player.connection.hasChannel(ChunksReport.TYPE)) {
+            PacketDistributor.sendToPlayer(player, new ChunksReport(dev.culprit.chunks.ChunkCensus.take(player.level().getServer())));
         }
     }
 

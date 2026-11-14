@@ -63,7 +63,9 @@ public final class CulpritScreen extends Screen {
     /** The bar of the tick's height: its key is written inside it. */
     private static final int BAR_H = 11;
     private @Nullable ReportData layoutData;
-    private boolean layoutSpikes, layoutFrames;
+    private boolean layoutSpikes, layoutFrames, layoutChunks;
+    private dev.culprit.net.@Nullable ChunkData layoutChunkData;
+    private final ChunksPanel panel = new ChunksPanel();
     /** Each tab's widest entry in its where and last columns for the report shown, or -1 until worked out. */
     private final int[] whereWidth = {-1, -1, -1, -1, -1}, lastWidth = {-1, -1, -1, -1, -1};
     private final List<Button> tabButtons = new ArrayList<>();
@@ -105,36 +107,47 @@ public final class CulpritScreen extends Screen {
         layoutData = ClientReport.base();
         layoutSpikes = ClientReport.spikesShown();
         layoutFrames = ClientReport.framesShown();
+        layoutChunks = ClientReport.chunksShown();
+        layoutChunkData = ClientReport.chunksData();
         ReportData d = ClientReport.view();
-        summaryLines = Math.clamp(this.font.split(headline(layoutData, d), inner).size(), 1, 3);
+        summaryLines = Math.clamp(this.font.split(layoutChunks ? chunksHeadline() : headline(layoutData, d), inner).size(), 1, 3);
         barY = top + 20 + summaryLines * 10 + 2;
         int tabsY = barY + BAR_H + 5;
         listTop = tabsY + 21;
         listBottom = bottom - 28;
         tabButtons.clear();
+        if (layoutChunks) {
+            // The loaded chunks: the map and the loaders under the headline, no tabs.
+            listTop = top + 20 + summaryLines * 10 + 6;
+            panel.layout(left + 8, listTop + 2, right - 12, listBottom);
+        }
         int viewW = Math.max(this.font.width(viewLabel(false)), this.font.width(viewLabel(true))) + 12;
         int tabW = Math.min(58, (inner - viewW - 4 * (TABS.length + 1)) / TABS.length);
         int x = left + 8;
-        for (int i = 0; i < TABS.length; i++) {
+        for (int i = 0; i < TABS.length && !layoutChunks; i++) {
             int index = i;
             tabButtons.add(addRenderableWidget(Button.builder(tabLabel(i), button -> showTab(index)).bounds(x, tabsY, tabW, 16).build()));
             x += tabW + 4;
         }
-        addRenderableWidget(Button.builder(viewLabel(layoutSpikes), b -> {
+        Button viewSwitch = addRenderableWidget(Button.builder(viewLabel(layoutSpikes), b -> {
             ClientReport.showSpikes(!ClientReport.spikesShown());
             scroll = 0;
             picked = -1;
         }).bounds(x, tabsY, viewW, 16).tooltip(Tooltip.create(layoutFrames
                 ? tr("view.about_frames", "Average: every frame of the scan. Stutters: only the frames that took over twice the usual frame (and at least 20 ms), to find what makes them slow.")
                 : tr("view.about", "Average: every tick of the scan. Lag spikes: only the ticks that took over twice the usual tick (and at least 5 ms), to find what makes them slow."))).build());
-        // Server ticks / Frames, after the title.
+        viewSwitch.visible = !layoutChunks;
+        // Server ticks / Frames / Loaded chunks, after the title.
         int sx = left + 8 + this.font.width(this.title.copy().withStyle(ChatFormatting.BOLD)) + 8;
-        for (int s = 0; s < 2; s++) {
-            boolean frames = s == 1;
-            Component label = sectionLabel(frames);
+        for (int s = 0; s < 3; s++) {
+            int section = s;
+            Component label = sectionLabel(s);
             int w = this.font.width(label) + 10;
             addRenderableWidget(Button.builder(label, b -> {
-                ClientReport.showFrames(frames);
+                ClientReport.showSection(section);
+                if (section == 2 && ClientReport.chunksData() == null) {
+                    ClientReport.requestChunks();              // a first look as the section opens
+                }
                 scroll = 0;
                 picked = -1;
             }).bounds(sx, top + 3, w, 14).build());
@@ -150,8 +163,11 @@ public final class CulpritScreen extends Screen {
         search.setResponder(text -> {
             query = text;
             scroll = 0;
+            panel.search(text);
         });
-        Component[] labels = {tr("new_scan", "New scan (%s)", CulpritKeys.SCAN.getTranslatedKeyMessage()), overlayLabel(),
+        panel.search(query);
+        Component[] labels = {layoutChunks ? (layoutChunkData == null ? tr("look", "Look now") : tr("look_again", "Look again"))
+                : tr("new_scan", "New scan (%s)", CulpritKeys.SCAN.getTranslatedKeyMessage()), overlayLabel(),
                 tr("teleport", "Teleport there"), tr("done", "Done")};
         int[] widths = new int[labels.length];
         int sum = 0;
@@ -176,7 +192,13 @@ public final class CulpritScreen extends Screen {
 
     private void press(int index, Button button) {
         switch (index) {
-            case 0 -> Minecraft.getInstance().gui.setScreen(new ScanScreen());
+            case 0 -> {
+                if (ClientReport.chunksShown()) {
+                    ClientReport.requestChunks();
+                } else {
+                    Minecraft.getInstance().gui.setScreen(new ScanScreen());
+                }
+            }
             case 1 -> {
                 Overlay.setShown(!Overlay.shown());
                 button.setMessage(overlayLabel());
@@ -207,12 +229,13 @@ public final class CulpritScreen extends Screen {
 
     @Override
     public void tick() {
-        if (ClientReport.base() != layoutData || ClientReport.spikesShown() != layoutSpikes || ClientReport.framesShown() != layoutFrames) {
+        if (ClientReport.base() != layoutData || ClientReport.spikesShown() != layoutSpikes || ClientReport.framesShown() != layoutFrames
+                || ClientReport.chunksShown() != layoutChunks || ClientReport.chunksData() != layoutChunkData) {
             rebuildWidgets();                                  // a new report, or the other view: the header laid out anew
             return;
         }
         if (teleport != null) {
-            teleport.active = picked >= 0 && markable();
+            teleport.active = layoutChunks ? panel.picked() != null : picked >= 0 && markable();
         }
     }
 
@@ -243,6 +266,21 @@ public final class CulpritScreen extends Screen {
             java.util.Arrays.fill(lastWidth, -1);
         }
         Component status = statusLine(d);
+        if (ClientReport.chunksShown()) {
+            if (searchLeft - 6 - this.font.width(status) >= sectionRight + 4) {
+                g.text(this.font, status, searchLeft - 6 - this.font.width(status), top + 6, DIM);
+            }
+            int y = top + 20;
+            for (FormattedCharSequence line : this.font.split(chunksHeadline(), right - left - 16)) {
+                if (y >= top + 20 + summaryLines * 10) {
+                    break;
+                }
+                g.text(this.font, line, left + 8, y, TEXT);
+                y += 10;
+            }
+            panel.draw(g, this.font, mouseX, mouseY);
+            return;
+        }
         if (searchLeft - 6 - this.font.width(status) >= sectionRight + 4) {
             g.text(this.font, status, searchLeft - 6 - this.font.width(status), top + 6, DIM);
         }
@@ -274,7 +312,25 @@ public final class CulpritScreen extends Screen {
         rows(g, d, mouseX, mouseY);
     }
 
+    /** The Loaded chunks section's sentence: the dimension's chunks, or why there are none to show. */
+    private Component chunksHeadline() {
+        if (!ScanScreen.serverHasCulprit()) {
+            return tr("chunks_no_server", "This server does not have Culprit: its loaded chunks cannot be looked at.");
+        }
+        if (ClientReport.state() == dev.culprit.net.CulpritNetwork.Status.DENIED) {
+            return tr("chunks_denied", "Only operators can look at this server's loaded chunks.");
+        }
+        return ChunksPanel.headline(ClientReport.chunksData() == null ? null : panel.dim());
+    }
+
     private Component statusLine(@Nullable ReportData d) {
+        if (ClientReport.chunksShown()) {
+            if (ClientReport.chunksData() == null) {
+                return Component.empty();
+            }
+            long ago = (System.currentTimeMillis() - ClientReport.chunksReceivedMillis()) / 1000;
+            return tr("looked", "Looked %s ago", ago < 60 ? ago + " s" : ago / 60 + " min");
+        }
         int secondsLeft = ClientReport.framesShown() ? FrameScan.secondsLeft() : ClientReport.secondsLeft();
         if (secondsLeft >= 0) {
             return tr("scanning", "Scanning the server: %s s left...", secondsLeft).withStyle(ChatFormatting.YELLOW);
@@ -340,9 +396,14 @@ public final class CulpritScreen extends Screen {
         return spikes ? tr("view.spikes", "Lag spikes").withStyle(ChatFormatting.GOLD) : tr("view.average", "Average");
     }
 
-    private static Component sectionLabel(boolean frames) {
-        MutableComponent label = frames ? tr("section.frames", "Frames") : tr("section.ticks", "Server ticks");
-        return frames == ClientReport.framesShown() ? label.withStyle(ChatFormatting.GOLD, ChatFormatting.UNDERLINE) : label;
+    private static Component sectionLabel(int section) {
+        MutableComponent label = switch (section) {
+            case 1 -> tr("section.frames", "Frames");
+            case 2 -> tr("section.chunks", "Loaded chunks");
+            default -> tr("section.ticks", "Server ticks");
+        };
+        int shown = ClientReport.chunksShown() ? 2 : ClientReport.framesShown() ? 1 : 0;
+        return section == shown ? label.withStyle(ChatFormatting.GOLD, ChatFormatting.UNDERLINE) : label;
     }
 
     private static Component summaryText(Component mean, String worst, int ticks) {
@@ -737,6 +798,9 @@ public final class CulpritScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+        if (ClientReport.chunksShown() && panel.scroll(x, y, scrollY)) {
+            return true;
+        }
         if (y >= listTop && y < listBottom) {
             scroll -= (int) Math.signum(scrollY) * 3;
             return true;
@@ -746,6 +810,10 @@ public final class CulpritScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (ClientReport.chunksShown() && event.button() == 0 && panel.click(event.x(), event.y())) {
+            tick();
+            return true;
+        }
         ReportData d = ClientReport.view();
         if (d != null && event.button() == 0 && event.y() >= listTop + ROW && event.y() < listBottom && event.x() >= left + 6 && event.x() < right - 10) {
             int r = (int) ((event.y() - (listTop + ROW)) / ROW);
@@ -799,6 +867,15 @@ public final class CulpritScreen extends Screen {
     private void teleport() {
         ReportData d = ClientReport.view();
         Minecraft mc = Minecraft.getInstance();
+        if (ClientReport.chunksShown()) {
+            ChunksPanel.Group loader = panel.picked();
+            if (loader != null && mc.getConnection() != null && mc.level != null) {
+                String here = mc.level.dimension().identifier().toString();
+                BlockPos at = surface((loader.sx() << 4) + 8, (loader.sz() << 4) + 8, here);
+                mc.getConnection().sendCommand("execute in " + here + " run tp @s " + (at.getX() + 0.5) + " " + (at.getY() + 1) + " " + (at.getZ() + 0.5));
+            }
+            return;
+        }
         if (d == null || picked < 0 || !markable() || mc.getConnection() == null || mc.player == null) {
             return;
         }

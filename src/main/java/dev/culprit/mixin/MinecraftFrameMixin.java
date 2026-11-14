@@ -96,6 +96,55 @@ abstract class MinecraftFrameMixin {
         }
     }
 
+    /**
+     * The drawing half of the frame: what of it no other part times is the wait for the GPU and the screen (wherever the
+     * driver puts it: fetching the next image, copying into it, showing it, or the first use of a buffer still in use)
+     * and the frame's housekeeping, all "showing the frame".
+     */
+    @WrapMethod(require = 0, method = "renderFrame(Z)V")
+    private void culprit$renderFrame(boolean advanceGameTime, Operation<Void> original) {
+        if (!FrameProbe.measuring()) {
+            original.call(advanceGameTime);
+            return;
+        }
+        long start = FrameProbe.begin();
+        try {
+            original.call(advanceGameTime);
+        } finally {
+            FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
+        }
+    }
+
+    // Where the wait for the screen falls (fetching the next image, copying into it, showing it) is the driver's choice.
+    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuSurface;acquireNextTexture()V"))
+    private void culprit$acquire(GpuSurface surface, Operation<Void> original) {
+        if (!FrameProbe.measuring()) {
+            original.call(surface);
+            return;
+        }
+        long start = FrameProbe.begin();
+        try {
+            original.call(surface);
+        } finally {
+            FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
+        }
+    }
+
+    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE",
+            target = "Lcom/mojang/renderpearl/api/device/GpuSurface;blitFromTexture(Lcom/mojang/renderpearl/api/commands/CommandEncoder;Lcom/mojang/renderpearl/api/textures/GpuTextureView;)V"))
+    private void culprit$blit(GpuSurface surface, CommandEncoder encoder, com.mojang.renderpearl.api.textures.GpuTextureView view, Operation<Void> original) {
+        if (!FrameProbe.measuring()) {
+            original.call(surface, encoder, view);
+            return;
+        }
+        long start = FrameProbe.begin();
+        try {
+            original.call(surface, encoder, view);
+        } finally {
+            FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
+        }
+    }
+
     @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuSurface;present()V"))
     private void culprit$present(GpuSurface surface, Operation<Void> original) {
         if (!FrameProbe.measuring()) {

@@ -99,6 +99,19 @@ final class ScanTests {
             }));
         });
 
+        // The chunk inspector: a chunk forced the way /forceload does and one kept by a mod's chunk loader (a hopper owns
+        // it), far from the plot, are named as such, with the block behind the mod's; their neighbours are loaded by them.
+        CulpritGameTests.testAlone("chunks_name_their_loaders", CulpritGameTests.FLOOR_16, 400, helper -> {
+            net.minecraft.server.level.ServerLevel level = helper.getLevel();
+            helper.setBlock(0, 1, 0, Blocks.HOPPER);
+            BlockPos owner = helper.absolutePos(new BlockPos(0, 1, 0));
+            ChunkPos home = ChunkPos.containing(owner);
+            int fx = home.x() + 40, mx = home.x() + 48, z = home.z();
+            level.setChunkForced(fx, z, true);
+            GameTestRegistration.CONTROLLER.forceChunk(level, owner, mx, z, true, false);
+            waitForChunks(helper, level, owner, fx, mx, z, 0);
+        });
+
         // The arithmetic of nested calls: a measured call inside another is charged its own time, and the outer one
         // only the rest (a vehicle and its passengers, a block entity setting off block events).
         CulpritGameTests.testAlone("probe_charges_own_time", CulpritGameTests.FLOOR_16, 200, helper -> whenNoScan(helper, () -> {
@@ -314,6 +327,44 @@ final class ScanTests {
         helper.assertTrue(hoppers.size() == 16 && hoppers.stream().allMatch(t -> t.calls() == s.ticks),
                 "the hoppers are in every spike tick: " + hoppers.size() + " of them");
         helper.succeed();
+    }
+
+    /** Looks at the chunks until the two far ones are loaded (they are made first), then checks what the census says. */
+    private static void waitForChunks(GameTestHelper helper, net.minecraft.server.level.ServerLevel level, BlockPos owner, int fx, int mx, int z,
+                                      int tries) {
+        dev.culprit.net.ChunkData data = dev.culprit.chunks.ChunkCensus.take(level.getServer());
+        dev.culprit.net.ChunkData.Dim d = data.dims.stream().filter(x -> x.dim.equals(level.dimension().identifier().toString())).findFirst()
+                .orElseThrow();
+        int forced = chunkAt(d, fx, z), mod = chunkAt(d, mx, z), next = chunkAt(d, fx + 1, z);
+        if ((forced < 0 || mod < 0 || next < 0) && tries < 30) {
+            helper.runAfterDelay(10, () -> waitForChunks(helper, level, owner, fx, mx, z, tries + 1));
+            return;
+        }
+        try {
+            helper.assertTrue(forced >= 0 && mod >= 0, "the forced chunk and the mod's are loaded (" + forced + ", " + mod + ")");
+            helper.assertTrue(d.reason[forced] == dev.culprit.net.ChunkData.FORCED && d.source[forced] >= 0
+                    && d.sowner[d.source[forced]].equals("/forceload"), "the forced chunk is kept by /forceload, not " + d.reason[forced]);
+            String why = d.source[mod] >= 0 ? d.sowner[d.source[mod]] : "";
+            helper.assertTrue(d.reason[mod] == dev.culprit.net.ChunkData.MODS && why.contains("culprit:test") && why.contains("minecraft:hopper")
+                    && why.contains(owner.getX() + " " + owner.getY() + " " + owner.getZ()), "the mod's chunk is kept by its loader and the hopper: " + why);
+            helper.assertTrue(next >= 0 && d.reason[next] == dev.culprit.net.ChunkData.FORCED && d.status[next] <= d.status[forced],
+                    "the forced chunk's neighbour is loaded by it, and no more busy than it");
+            String text = dev.culprit.chunks.ChunkText.summary(data).getString();
+            helper.assertTrue(text.contains("/forceload") && text.contains("culprit:test"), "the text names both loaders: " + text);
+            helper.succeed();
+        } finally {
+            level.setChunkForced(fx, z, false);
+            GameTestRegistration.CONTROLLER.forceChunk(level, owner, mx, z, false, false);
+        }
+    }
+
+    private static int chunkAt(dev.culprit.net.ChunkData.Dim d, int x, int z) {
+        for (int i = 0; i < d.chunks; i++) {
+            if (d.x[i] == x && d.z[i] == z) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** Runs {@code then} once no scan is running (another test's may be). */

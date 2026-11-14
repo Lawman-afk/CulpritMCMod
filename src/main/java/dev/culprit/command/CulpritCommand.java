@@ -40,6 +40,11 @@ public final class CulpritCommand {
                         .then(Commands.argument("seconds", IntegerArgumentType.integer(5, 600))
                                 .executes(c -> scan(c, IntegerArgumentType.getInteger(c, "seconds")))))
                 .then(Commands.literal("stop").executes(CulpritCommand::stop))
+                .then(Commands.literal("chunks").executes(c -> {
+                    var data = dev.culprit.chunks.ChunkCensus.take(c.getSource().getServer());
+                    c.getSource().sendSuccess(() -> dev.culprit.chunks.ChunkText.summary(data), false);
+                    return data.dims.stream().mapToInt(d -> d.total).sum();
+                }))
                 .then(top));
     }
 

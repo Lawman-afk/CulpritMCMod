@@ -4,6 +4,7 @@ import org.jspecify.annotations.Nullable;
 
 import dev.culprit.command.ReportText;
 import dev.culprit.net.CulpritNetwork;
+import dev.culprit.net.ChunkData;
 import dev.culprit.net.ReportData;
 import dev.culprit.scan.FrameScan;
 import dev.culprit.scan.Kind;
@@ -29,6 +30,10 @@ public final class ClientReport {
     private static @Nullable ReportData frames;
     private static long framesReceivedMillis;
     private static boolean framesShown;
+    /** The last look at the loaded chunks (the chunk inspector), when it came, and whether the results show it. */
+    private static @Nullable ChunkData chunks;
+    private static long chunksReceivedMillis;
+    private static boolean chunksShown;
 
     private ClientReport() {}
 
@@ -36,9 +41,45 @@ public final class ClientReport {
         return data;
     }
 
-    /** The scan shown: the server's ticks, or this game's frames. */
+    /** The scan shown: the server's ticks, or this game's frames (none while the loaded chunks are shown). */
     public static @Nullable ReportData base() {
-        return framesShown ? frames : data;
+        return chunksShown ? null : framesShown ? frames : data;
+    }
+
+    public static @Nullable ChunkData chunksData() {
+        return chunks;
+    }
+
+    public static long chunksReceivedMillis() {
+        return chunksReceivedMillis;
+    }
+
+    public static boolean chunksShown() {
+        return chunksShown;
+    }
+
+    /** Shows a section of the results: 0 the server's ticks, 1 this game's frames, 2 the loaded chunks. */
+    public static void showSection(int section) {
+        framesShown = section == 1;
+        chunksShown = section == 2;
+        Overlay.newReport(view());
+        Overlay.markLoader(null);
+    }
+
+    /** Asks the server for a look at its loaded chunks (operators, as scans). */
+    public static void requestChunks() {
+        if (ScanScreen.serverHasCulprit()) {
+            net.neoforged.neoforge.client.network.ClientPacketDistributor.sendToServer(new CulpritNetwork.ChunksRequest());
+        }
+    }
+
+    static void receiveChunks(ChunkData report) {
+        chunks = report;
+        chunksReceivedMillis = System.currentTimeMillis();
+        chunksShown = true;
+        framesShown = false;
+        Overlay.newReport(view());
+        Overlay.markLoader(null);
     }
 
     /** The report shown: the shown scan's average, or its lag spikes or stutters (null when there were none). */
@@ -59,6 +100,7 @@ public final class ClientReport {
     /** Shows the frames' results, or the ticks' again, in the results and on the world. */
     public static void showFrames(boolean on) {
         framesShown = on;
+        chunksShown = false;
         Overlay.newReport(view());
     }
 
@@ -89,6 +131,7 @@ public final class ClientReport {
         framesReceivedMillis = System.currentTimeMillis();
         Names.clear();
         framesShown = true;                                     // the results open on what was just scanned
+        chunksShown = false;
         Overlay.newReport(view());
         say(finished(report));
     }
@@ -122,6 +165,7 @@ public final class ClientReport {
         receivedMillis = System.currentTimeMillis();
         Names.clear();
         framesShown = false;                                    // the results open on what was just scanned
+        chunksShown = false;
         if (state == CulpritNetwork.Status.STARTED || state == CulpritNetwork.Status.BUSY) {
             state = -1;
         }
@@ -234,6 +278,8 @@ public final class ClientReport {
         data = null;
         frames = null;
         framesShown = false;
+        chunks = null;
+        chunksShown = false;
         FrameScan.stop();
         state = -1;
         spikesShown = false;

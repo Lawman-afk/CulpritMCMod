@@ -19,7 +19,7 @@ public final class FramePhase {
             "the world's blocks, sky and weather in view", "all of them handed in, and the rarer kinds made ready",
             "the world's other parts, handed in", "the handed-in parts put in order (the things' shares are with them)",
             "terrain, sky and clouds sent to the GPU", "changed chunks turned into meshes", "the HUD, chat and screens",
-            "other mods' code run every frame", "waiting for the GPU or the screen's refresh", "waiting, as the frame-rate limit asks",
+            "other mods' code run every frame", "waiting for the GPU or the screen, and the frame's upkeep", "waiting, as the frame-rate limit asks",
             "the sorted parts sent to the GPU (the things' shares are with them)"};
 
     private FramePhase() {}
