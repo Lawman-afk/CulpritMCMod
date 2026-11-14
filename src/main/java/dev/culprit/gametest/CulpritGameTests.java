@@ -1,0 +1,56 @@
+package dev.culprit.gametest;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.function.Consumer;
+
+import dev.culprit.Culprit;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Blocks;
+import net.neoforged.bus.api.IEventBus;
+
+/**
+ * GameTest harness: every test, a function run over a structure within a timeout, listed here; how they reach the game
+ * is {@link GameTestRegistration}'s (each version its own). Run them all with {@code gradlew runGameTestServer}, or in a
+ * dev world with {@code /test runall}. Test structures are NBT templates under {@code data/culprit/structure/gametest/}.
+ */
+public final class CulpritGameTests {
+    /** Structure with a 16x16 smooth-stone floor at y=0 and 15 blocks of air above. */
+    public static final Identifier FLOOR_16 = Culprit.id("gametest/floor_16");
+
+    private static final List<TestSpec> SPECS = new ArrayList<>();
+
+    /** A test: its name, the structure it runs in, its timeout, whether its plot has open sky, and what it does. */
+    public record TestSpec(String name, Identifier structure, int maxTicks, boolean sky, Consumer<GameTestHelper> body) {}
+
+    static {
+        test("harness_floor", FLOOR_16, 20, helper -> {
+            helper.assertBlockPresent(Blocks.SMOOTH_STONE, 0, 0, 0);
+            helper.assertBlockPresent(Blocks.SMOOTH_STONE, 15, 0, 15);
+            helper.assertBlockPresent(Blocks.AIR, 7, 1, 7);
+            helper.succeed();
+        });
+    }
+
+    private CulpritGameTests() {}
+
+    static void test(String name, Identifier structure, int maxTicks, Consumer<GameTestHelper> body) {
+        SPECS.add(new TestSpec(name, structure, maxTicks, false, body));
+    }
+
+    /** A test with open sky over its plot (no barrier lid), for things that reach above it. */
+    static void testOpenSky(String name, Identifier structure, int maxTicks, Consumer<GameTestHelper> body) {
+        SPECS.add(new TestSpec(name, structure, maxTicks, true, body));
+    }
+
+    /** Every test, in the order listed. */
+    public static List<TestSpec> specs() {
+        return Collections.unmodifiableList(SPECS);
+    }
+
+    public static void register(IEventBus modBus) {
+        GameTestRegistration.register(modBus, SPECS);
+    }
+}
