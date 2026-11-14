@@ -2,7 +2,6 @@ package dev.culprit.chunks;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 import dev.culprit.Culprit;
 import dev.culprit.mixin.ChunkMapAccessor;
@@ -11,7 +10,6 @@ import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -36,9 +34,10 @@ import net.neoforged.neoforge.common.world.chunk.TicketSet;
 /**
  * The chunk inspector (DESIGN §4.3): every loaded chunk of every dimension, and why. Each chunk is loaded by the
  * loading tickets within reach of it (a ticket of level L at a chunk makes the chunks d away level L + d; up to 33 they
- * are playable); its reason is the strongest one's. A ticket's owner is named: the players standing in its chunk, the
- * mod and block or entity behind a NeoForge chunk loader (from the world's own record of them, as it saves them),
- * /forceload, a portal, an ender pearl and who threw it, the world spawn. Taken on demand, on the server thread.
+ * are playable); its reason is the strongest one's. A ticket's owner is named: the nearest player, the mod behind a
+ * NeoForge chunk loader and the block, entity, player or team that owns it (from the world's own record of them, as it
+ * saves them), a mod's own kind of ticket, who forced a chunk (/forceload by whom, or a mod's code: {@link ForcedBy}),
+ * a portal, an ender pearl and who threw it, the world spawn. Taken on demand, on the server thread.
  */
 public final class ChunkCensus {
     /** The owner named for the game's passing requests for a chunk (the "unknown" tickets, gone a tick later). */
@@ -71,7 +70,14 @@ public final class ChunkCensus {
             long key = entry.getLongKey();
             for (Ticket ticket : storage.getTickets(key)) {
                 TicketType type = ticket.getType();
-                if (type.doesLoad()) {
+                if (!type.doesLoad()) {
+                    continue;
+                }
+                if (type == TicketType.FORCED) {
+                    // The ticket /forceload and the game's setChunkForced share: whose it is, from Culprit's record.
+                    String by = ForcedBy.of(level, key);
+                    sources.add(new Source(key, ticket.getTicketLevel(), ForcedBy.reason(by), ForcedBy.describe(by)));
+                } else {
                     byte reason = reasonOf(type);
                     sources.add(new Source(key, ticket.getTicketLevel(), reason, ownerOf(level, key, type, reason, modOwners)));
                 }
@@ -185,8 +191,11 @@ public final class ChunkCensus {
             return ChunkData.SPAWN;
         }
         Identifier id = BuiltInRegistries.TICKET_TYPE.getKey(type);
-        return id != null && !id.getNamespace().equals("minecraft") ? ChunkData.MODS : ChunkData.OTHER;
+        // (NeoForge's own is its /neoforge generate command making new chunks, no mod's)
+        return id != null && !id.getNamespace().equals("minecraft") && !id.equals(GENERATE) ? ChunkData.MODS : ChunkData.OTHER;
     }
+
+    private static final Identifier GENERATE = Identifier.fromNamespaceAndPath("neoforge", "generate_forced");
 
     /** Who or what is behind a ticket, in a few words. */
     private static String ownerOf(ServerLevel level, long chunk, TicketType type, byte reason, Long2ObjectMap<List<String>> modOwners) {
@@ -207,7 +216,6 @@ public final class ChunkCensus {
                 }
                 yield nearest == null ? "a player" : nearest.getName().getString();
             }
-            case ChunkData.FORCED -> "/forceload";
             case ChunkData.PORTALS -> "a portal";
             case ChunkData.PEARLS -> {
                 for (Entity entity : level.getAllEntities()) {
@@ -220,12 +228,16 @@ public final class ChunkCensus {
             }
             case ChunkData.SPAWN -> "the world spawn";
             case ChunkData.MODS -> {
+                // A NeoForge chunk loader is the mod's and the block or entity that owns it; a mod's own kind of ticket its.
                 List<String> owners = modOwners.get(chunk);
-                yield owners != null && !owners.isEmpty() && typeName.startsWith("neoforge:") && !typeName.equals("neoforge:generate_forced")
-                        ? String.join("; ", owners) : typeName.equals("neoforge:generate_forced") ? "chunks being made for a mod" : typeName;
+                if (typeName.startsWith("neoforge:")) {
+                    yield owners != null && !owners.isEmpty() ? String.join("; ", owners) : "a mod's chunk loader";
+                }
+                yield id == null ? typeName : OwnerNames.ticketType(id);
             }
             // The game asked for the chunk just now (and lets go of it a tick later): no loader to act on.
-            default -> typeName.equals("minecraft:dragon") ? "the dragon fight" : type == TicketType.UNKNOWN ? PASSING : typeName;
+            default -> typeName.equals("minecraft:dragon") ? "the dragon fight" : type == TicketType.UNKNOWN ? PASSING
+                    : GENERATE.equals(id) ? "/neoforge generate" : typeName;
         };
     }
 
@@ -242,18 +254,14 @@ public final class ChunkCensus {
             }
             for (ForcedChunkManager.OwnedChunks owned : ForcedChunkManager.OwnedChunks.CODEC.listOf().parse(NbtOps.INSTANCE, list).result()
                     .orElse(List.of())) {
-                String controller = owned.controller().toString();
+                // "FTB Chunks: team Steve's Party", "Mekanism: Digital Miner at 10 64 -5": the mod, then what owns the loader.
+                String controller = OwnerNames.mod(owned.controller().getNamespace());
                 for (var entry : owned.blockChunks().entrySet()) {
-                    BlockPos pos = entry.getKey();
-                    String block = level.isLoaded(pos) ? BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock()).toString() : "a block";
-                    add(owners, entry.getValue(), controller + " (" + block + " at " + pos.getX() + " " + pos.getY() + " " + pos.getZ() + ")");
+                    add(owners, entry.getValue(), controller + ": " + OwnerNames.block(level, entry.getKey()));
                 }
                 for (var entry : owned.entityChunks().entrySet()) {
-                    UUID uuid = entry.getKey();
-                    Entity entity = level.getEntity(uuid);
-                    String who = entity == null ? "an entity not loaded" : BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()) + " at "
-                            + entity.blockPosition().getX() + " " + entity.blockPosition().getY() + " " + entity.blockPosition().getZ();
-                    add(owners, entry.getValue(), controller + " (" + who + ")");
+                    // An id: an entity, or no entity at all (a player's, a team's), which the mod chose.
+                    add(owners, entry.getValue(), controller + ": " + OwnerNames.uuid(level.getServer(), level, entry.getKey()));
                 }
             }
         } catch (RuntimeException e) {

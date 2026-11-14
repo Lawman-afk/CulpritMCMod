@@ -9,7 +9,9 @@
     "ServerLevelTickMixin",
     "ServerChunkCacheMixin",
     "MinecraftServerMixin",
-    "ChunkMapAccessor"
+    "ChunkMapAccessor",
+    "ForcedChunkMixin",
+    "ForceLoadCommandMixin"
   ],
   "client": [
     "DevMouseMixin",

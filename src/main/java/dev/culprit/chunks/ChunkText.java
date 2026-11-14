@@ -61,7 +61,7 @@ public final class ChunkText {
     }
 
     /** The loaders that are not players, with how many chunks each keeps playable: "create:... (x y z): 9 chunks". */
-    static List<String> loaders(ChunkData.Dim d, int max) {
+    public static List<String> loaders(ChunkData.Dim d, int max) {
         Map<String, int[]> counts = new HashMap<>();
         for (int s = 0; s < d.sources; s++) {
             if (d.sreason[s] == ChunkData.PLAYERS || d.sowner[s].equals(ChunkCensus.PASSING)) {

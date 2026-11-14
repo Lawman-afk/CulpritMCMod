@@ -101,6 +101,25 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
   loaders listed with the chunks each keeps loaded (mods and forced first; the search box narrows them), a click
   marking them on the map and the world, teleport to one; on the world, the loaded chunks near the camera outlined in
   their colours and the loaders other than players named over their chunks. `/culprit chunks` for consoles.
+- **Every kind of chunk loader** (the user: "Does the force load account for modded chunk loader? Of any type too?
+  Items, FTB maps, commands, blocks?"). A chunk stays loaded only while a loading ticket holds it, and the inspector
+  reads every ticket of every dimension, so nothing that keeps a chunk loaded is missed; what differs is how well its
+  owner is named:
+  - NeoForge's chunk-loader API (blocks, entities, items carried by a player, claim mods): the mod by its name, then
+    the block and its place, the entity, or the owner known by id: a player online or seen by the server, a team of
+    FTB Teams (FTB Chunks keeps a team's force-loaded claims under the team's id: checked in its source on 1.21.1 and
+    26.1), else the id's first eight digits. "FTB Chunks: team Steve's Party", "Mekanism: Digital Miner at 10 64 -5".
+  - A mod's own kind of ticket: the mod and the ticket's name ("Create: contraption").
+  - The game's forced ticket, which `/forceload` and a mod calling the game's `setChunkForced` share and which says
+    nothing of its owner: Culprit records each change as it happens and keeps the record with the world (its own
+    small saved data, each dimension's `data/culprit/forced_chunks.dat`): "/forceload by Steve" (or by a command block, the server),
+    "Mekanism: forced chunk" (the mod whose code asked, the first class on the stack that is no part of the game,
+    NeoForge or a library, found in the mod files), the game's test structures; a chunk forced before Culprit was
+    installed reads "/forceload or a mod".
+  - NeoForge's `/neoforge generate` making new chunks; portals, ender pearls (and who threw them), the dragon fight,
+    the spawn, players; the game's passing requests (a chunk asked for just now, let go a tick later).
+  Not yet named: the code behind passing requests (a mod that keeps a chunk loaded by asking for it every tick shows as
+  passing requests, not by name).
 
 ### 4.4 Results on the world and on screen
 
@@ -236,3 +255,4 @@ cost nothing); ModernFix.
 | 2026-11-14 | The frame hooks are optional (`require = 0`): a hook that cannot find its place (another mod changed the frame loop, a later version) leaves that part unmeasured instead of stopping the game, which the tick hooks still do since the tick scan is useless without them. The Lab names any frame part never timed. |
 | 2026-11-14 | Particles by kind (a new kind, chunk-wide like random ticks: per kind and chunk, not per particle) and the drawing shared out by parts handed in: the two gaps the first frame scan left, done before the chunk inspector. A particle's type is kept in a field set when the engine makes it (a mixin), its cost charged by kind; one added another way is named by its class. |
 | 2026-11-14 | The chunk inspector built on 26.3 ("continue with your plans"): a chunk's reason is its strongest loading ticket's (level plus distance), a player's taken last on a tie (a player's surroundings are expected to be loaded; a mod's or a forced chunk is what stays when everyone leaves); a loader is listed with every chunk it keeps playable, not only those it is strongest for. NeoForge's chunk-loader owners are read through the world's save codec rather than its private trackers (public, and what the world itself writes). Sent on request (operators, as scans), at most 40,000 chunks. |
+| 2026-11-14 | The user asked whether the inspector accounts for modded chunk loaders "of any type". Every loading ticket was already read, so every loader was counted; two kinds were named wrongly. A loader owned by an id that is no entity (FTB Chunks keeps a team's claims under the team's id, which we checked in its source) read "an entity not loaded"; it is now named as the player or team. A mod forcing a chunk the game's own way read "/forceload"; a record of each change, kept with the world, now says who ran /forceload or which mod's code asked. The mod is found from the stack, by the first class that is not the game's, found in the mod files: dependable, and paid only when a chunk is forced. Both hooks are optional (`require = 0`), like the frame hooks. Mods are named as they name themselves, blocks and entities as the game does. |

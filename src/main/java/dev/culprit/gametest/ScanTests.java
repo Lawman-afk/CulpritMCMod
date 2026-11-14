@@ -1,11 +1,16 @@
 package dev.culprit.gametest;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 import dev.culprit.Culprit;
-
+import dev.culprit.chunks.ChunkCensus;
+import dev.culprit.chunks.ChunkText;
+import dev.culprit.chunks.ForcedBy;
+import dev.culprit.net.ChunkData;
 import dev.culprit.scan.Kind;
 import dev.culprit.scan.Phase;
 import dev.culprit.scan.Probe;
@@ -16,8 +21,10 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.entity.vehicle.minecart.Minecart;
@@ -99,17 +106,22 @@ final class ScanTests {
             }));
         });
 
-        // The chunk inspector: a chunk forced the way /forceload does and one kept by a mod's chunk loader (a hopper owns
-        // it), far from the plot, are named as such, with the block behind the mod's; their neighbours are loaded by them.
+        // The chunk inspector: far from the plot, a chunk forced by /forceload (the server runs it), one forced the game's
+        // way by a mod's code (this one's), one kept by a mod's chunk loader that a hopper owns, and one by a loader
+        // owned by an id that is no entity (a team's, the way FTB Chunks keeps a team's claims). Each is named as such,
+        // with the mod, block or owner behind it, their neighbours are loaded by them, the plot's own chunk is the test
+        // structure's, and the record of who forced what is saved and loaded whole and drops a chunk let go of.
         CulpritGameTests.testAlone("chunks_name_their_loaders", CulpritGameTests.FLOOR_16, 400, helper -> {
-            net.minecraft.server.level.ServerLevel level = helper.getLevel();
+            ServerLevel level = helper.getLevel();
             helper.setBlock(0, 1, 0, Blocks.HOPPER);
             BlockPos owner = helper.absolutePos(new BlockPos(0, 1, 0));
             ChunkPos home = ChunkPos.containing(owner);
-            int fx = home.x() + 40, mx = home.x() + 48, z = home.z();
-            level.setChunkForced(fx, z, true);
-            GameTestRegistration.CONTROLLER.forceChunk(level, owner, mx, z, true, false);
-            waitForChunks(helper, level, owner, fx, mx, z, 0);
+            Loaders at = new Loaders(home.x() + 40, home.x() + 46, home.x() + 52, home.x() + 58, home.z());
+            level.getServer().getCommands().performPrefixedCommand(serverSource(level), "forceload add " + at.command() * 16 + " " + at.z() * 16);
+            level.setChunkForced(at.code(), at.z(), true);
+            GameTestRegistration.CONTROLLER.forceChunk(level, owner, at.block(), at.z(), true, false);
+            GameTestRegistration.CONTROLLER.forceChunk(level, TEAM, at.team(), at.z(), true, false);
+            waitForChunks(helper, level, owner, at, 0);
         });
 
         // The arithmetic of nested calls: a measured call inside another is charged its own time, and the outer one
@@ -330,32 +342,64 @@ final class ScanTests {
     }
 
     /** Looks at the chunks until the two far ones are loaded (they are made first), then checks what the census says. */
-    private static void waitForChunks(GameTestHelper helper, net.minecraft.server.level.ServerLevel level, BlockPos owner, int fx, int mx, int z,
-                                      int tries) {
-        dev.culprit.net.ChunkData data = dev.culprit.chunks.ChunkCensus.take(level.getServer());
-        dev.culprit.net.ChunkData.Dim d = data.dims.stream().filter(x -> x.dim.equals(level.dimension().identifier().toString())).findFirst()
-                .orElseThrow();
-        int forced = chunkAt(d, fx, z), mod = chunkAt(d, mx, z), next = chunkAt(d, fx + 1, z);
-        if ((forced < 0 || mod < 0 || next < 0) && tries < 30) {
-            helper.runAfterDelay(10, () -> waitForChunks(helper, level, owner, fx, mx, z, tries + 1));
+    /** An id that is no entity, owning a chunk loader the way a team owns FTB Chunks' (its first eight digits name it). */
+    private static final UUID TEAM = UUID.nameUUIDFromBytes("culprit test team".getBytes(StandardCharsets.UTF_8));
+
+    /** The chunks x of the four loaders, on one row z. */
+    private record Loaders(int command, int code, int block, int team, int z) {}
+
+    private static CommandSourceStack serverSource(ServerLevel level) {
+        return level.getServer().createCommandSourceStack().withLevel(level).withSuppressedOutput();
+    }
+
+    private static void waitForChunks(GameTestHelper helper, ServerLevel level, BlockPos owner, Loaders at, int tries) {
+        ChunkData data = ChunkCensus.take(level.getServer());
+        ChunkData.Dim d = data.dims.stream().filter(x -> x.dim.equals(level.dimension().identifier().toString())).findFirst().orElseThrow();
+        int command = chunkAt(d, at.command(), at.z()), code = chunkAt(d, at.code(), at.z()), block = chunkAt(d, at.block(), at.z());
+        int team = chunkAt(d, at.team(), at.z()), next = chunkAt(d, at.command() + 1, at.z());
+        if ((command < 0 || code < 0 || block < 0 || team < 0 || next < 0) && tries < 30) {
+            helper.runAfterDelay(10, () -> waitForChunks(helper, level, owner, at, tries + 1));
             return;
         }
+        long commandKey = ChunkPos.pack(at.command(), at.z()), codeKey = ChunkPos.pack(at.code(), at.z());
         try {
-            helper.assertTrue(forced >= 0 && mod >= 0, "the forced chunk and the mod's are loaded (" + forced + ", " + mod + ")");
-            helper.assertTrue(d.reason[forced] == dev.culprit.net.ChunkData.FORCED && d.source[forced] >= 0
-                    && d.sowner[d.source[forced]].equals("/forceload"), "the forced chunk is kept by /forceload, not " + d.reason[forced]);
-            String why = d.source[mod] >= 0 ? d.sowner[d.source[mod]] : "";
-            helper.assertTrue(d.reason[mod] == dev.culprit.net.ChunkData.MODS && why.contains("culprit:test") && why.contains("minecraft:hopper")
-                    && why.contains(owner.getX() + " " + owner.getY() + " " + owner.getZ()), "the mod's chunk is kept by its loader and the hopper: " + why);
-            helper.assertTrue(next >= 0 && d.reason[next] == dev.culprit.net.ChunkData.FORCED && d.status[next] <= d.status[forced],
+            helper.assertTrue(command >= 0 && code >= 0 && block >= 0 && team >= 0, "the four loaders' chunks are loaded");
+            assertKept(helper, d, command, ChunkData.FORCED, "/forceload by the server");
+            assertKept(helper, d, code, ChunkData.MODS, "Culprit: forced chunk");
+            assertKept(helper, d, block, ChunkData.MODS, "Culprit: Hopper at " + owner.getX() + " " + owner.getY() + " " + owner.getZ());
+            assertKept(helper, d, team, ChunkData.MODS, "Culprit: owner " + TEAM.toString().substring(0, 8));
+            ChunkPos home = ChunkPos.containing(owner);
+            assertKept(helper, d, chunkAt(d, home.x(), home.z()), ChunkData.OTHER, "the game's test structures");
+            helper.assertTrue(next >= 0 && d.reason[next] == ChunkData.FORCED && d.status[next] <= d.status[command],
                     "the forced chunk's neighbour is loaded by it, and no more busy than it");
-            String text = dev.culprit.chunks.ChunkText.summary(data).getString();
-            helper.assertTrue(text.contains("/forceload") && text.contains("culprit:test"), "the text names both loaders: " + text);
+            List<String> lines = ChunkText.loaders(d, 1000);
+            for (String loader : List.of("/forceload by the server", "Culprit: forced chunk", "Culprit: Hopper", "Culprit: owner")) {
+                helper.assertTrue(lines.stream().anyMatch(line -> line.startsWith(loader)), "the text names " + loader + ": " + lines);
+            }
+
+            // The record goes with the level's data: saved and loaded, it is the same.
+            ForcedBy record = level.getDataStorage().get(ForcedBy.TYPE);
+            helper.assertTrue(record != null && record.get(codeKey) != null, "the level keeps a record of who forced what");
+            ForcedBy loaded = ForcedBy.CODEC.parse(NbtOps.INSTANCE, ForcedBy.CODEC.encodeStart(NbtOps.INSTANCE, record).getOrThrow()).getOrThrow();
+            helper.assertTrue(record.get(codeKey).equals(loaded.get(codeKey)) && record.get(commandKey).equals(loaded.get(commandKey)),
+                    "the record saves and loads as it was");
+            level.getServer().getCommands().performPrefixedCommand(serverSource(level), "forceload remove " + at.command() * 16 + " " + at.z() * 16);
+            helper.assertTrue(ForcedBy.of(level, commandKey) == null && !level.getForceLoadedChunks().contains(commandKey),
+                    "/forceload remove lets the chunk go, and its record with it");
             helper.succeed();
         } finally {
-            level.setChunkForced(fx, z, false);
-            GameTestRegistration.CONTROLLER.forceChunk(level, owner, mx, z, false, false);
+            level.setChunkForced(at.command(), at.z(), false);
+            level.setChunkForced(at.code(), at.z(), false);
+            GameTestRegistration.CONTROLLER.forceChunk(level, owner, at.block(), at.z(), false, false);
+            GameTestRegistration.CONTROLLER.forceChunk(level, TEAM, at.team(), at.z(), false, false);
         }
+    }
+
+    private static void assertKept(GameTestHelper helper, ChunkData.Dim d, int chunk, byte reason, String owner) {
+        String why = chunk >= 0 && d.source[chunk] >= 0 ? d.sowner[d.source[chunk]] : "nothing";
+        helper.assertTrue(chunk >= 0 && d.reason[chunk] == reason && why.equals(owner), "chunk "
+                + (chunk >= 0 ? d.x[chunk] + ", " + d.z[chunk] : "?") + " is kept by \"" + owner + "\" (reason " + reason + "), not \"" + why
+                + "\" (reason " + (chunk >= 0 ? d.reason[chunk] : -1) + ")");
     }
 
     private static int chunkAt(dev.culprit.net.ChunkData.Dim d, int x, int z) {

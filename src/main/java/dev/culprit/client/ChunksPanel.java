@@ -216,14 +216,17 @@ final class ChunksPanel {
             default -> Component.translatableWithFallback("culprit.chunks.status.border", "at the border: loaded, not ticking");
         };
         String by = d.source[i] >= 0 ? d.sowner[d.source[i]] : "?";
+        // The reason after the loader, unless the loader's name says it ("/forceload by Steve").
+        String reason = ChunkText.reasonName(d.reason[i]).getString();
+        String kind = by.toLowerCase(Locale.ROOT).startsWith(reason.toLowerCase(Locale.ROOT)) ? "" : " (" + reason + ")";
         StringBuilder also = new StringBuilder();
         for (int r = 0; r < ChunkData.REASONS; r++) {
             if (r != d.reason[i] && (d.reasons[i] & (1 << r)) != 0) {
                 also.append(also.isEmpty() ? "" : ", ").append(ChunkText.reasonName(r).getString());
             }
         }
-        return Component.translatableWithFallback("culprit.chunks.tooltip", "Chunk %s, %s: %s\nKept loaded by %s (%s)%s\n%s block entities, %s entities",
-                d.x[i], d.z[i], status, by, ChunkText.reasonName(d.reason[i]),
+        return Component.translatableWithFallback("culprit.chunks.tooltip", "Chunk %s, %s: %s\nKept loaded by %s%s%s\n%s block entities, %s entities",
+                d.x[i], d.z[i], status, by, kind,
                 also.isEmpty() ? "" : Component.translatableWithFallback("culprit.chunks.also", "; also %s", also.toString()).getString(),
                 d.blockEntities[i], d.entities[i]);
     }
