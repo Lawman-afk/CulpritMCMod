@@ -24,7 +24,7 @@ public final class CulpritMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        return !(NO_HOOKS && (mixinClassName.endsWith(".LevelTickMixin") || mixinClassName.endsWith(".ServerLevelTickMixin")));
+        return !(NO_HOOKS && !mixinClassName.endsWith(".DevMouseMixin"));   // every tick hook out, for the comparison
     }
 
     @Override

@@ -21,7 +21,6 @@ import net.minecraft.world.level.Level;
  */
 public final class ReportText {
     /** A server tick's budget at 20 ticks a second. */
-    private static final double TICK_NS = 50_000_000.0;
 
     private ReportText() {}
 
@@ -42,8 +41,9 @@ public final class ReportText {
     }
 
     /** A per-tick time as a share of the tick's 50 ms. */
-    public static String share(long nsPerTick) {
-        return String.format(Locale.ROOT, "%.1f%%", nsPerTick / TICK_NS * 100.0);
+    /** A part's share of a whole (both summed over the scan, or both per tick), as "12.3%". */
+    public static String share(long part, long whole) {
+        return String.format(Locale.ROOT, "%.1f%%", whole <= 0 ? 0.0 : part * 100.0 / whole);
     }
 
     public static Component summaryLine(ScanReport r) {
@@ -54,8 +54,10 @@ public final class ReportText {
         MutableComponent text = tr("report.summary", "Culprit scanned %s ticks. The server tick took %s on average and %s at worst (a tick has 50 ms).",
                 r.ticks, time(r.perTick(r.tickNsTotal)), time(r.tickNsMax));
         MutableComponent kinds = tr("report.measured", "Measured per tick: %s.", kindList(r));
+        MutableComponent phases = tr("report.phases", "The tick's other parts: %s; Culprit's own timing about %s; not measured %s.",
+                phaseList(r), time(r.perTick(r.selfNs)), time(r.perTick(r.unaccountedNs())));
         MutableComponent more = tr("report.more", "Details: /culprit top things, types, mods or chunks.").withStyle(ChatFormatting.GRAY);
-        MutableComponent all = Component.empty().append(text).append("\n").append(kinds).append("\n").append(more);
+        MutableComponent all = Component.empty().append(text).append("\n").append(kinds).append("\n").append(phases).append("\n").append(more);
         if (r.incomplete) {
             all.append("\n").append(tr("report.incomplete", "The scan met more than a million things and measured only the first million.")
                     .withStyle(ChatFormatting.YELLOW));
@@ -70,6 +72,17 @@ public final class ReportText {
                 list.append(", ");
             }
             list.append(tr("kind." + Kind.key(k), Kind.english(k))).append(" " + time(r.perTick(r.kindNs[k])));
+        }
+        return list;
+    }
+
+    private static Component phaseList(ScanReport r) {
+        MutableComponent list = Component.empty();
+        for (int p = 0; p < dev.culprit.scan.Phase.COUNT; p++) {
+            if (p > 0) {
+                list.append(", ");
+            }
+            list.append(tr("phase." + dev.culprit.scan.Phase.key(p), dev.culprit.scan.Phase.english(p))).append(" " + time(r.perTick(r.phaseNs[p])));
         }
         return list;
     }
@@ -90,7 +103,7 @@ public final class ReportText {
                 .append(Component.literal(" (").append(tr("kind.one." + Kind.key(th.kind()), Kind.englishOne(th.kind()))).append(")")
                         .withStyle(ChatFormatting.GRAY))
                 .append(" ").append(place(th.level(), th.blockPos(), teleport))
-                .append(": ").append(cost(perTick)).append(Component.literal(", ").withStyle(ChatFormatting.GRAY))
+                .append(": ").append(cost(perTick, r)).append(Component.literal(", ").withStyle(ChatFormatting.GRAY))
                 .append(tr("report.worst", "worst %s", time(th.maxNs())).withStyle(ChatFormatting.GRAY));
         return line;
     }
@@ -103,7 +116,7 @@ public final class ReportText {
                     .withStyle(ChatFormatting.GRAY));
         }
         return Component.literal(rank + ". ").withStyle(ChatFormatting.GRAY).append(name)
-                .append(": ").append(cost(perTick))
+                .append(": ").append(cost(perTick, r))
                 .append(Component.literal(", ").withStyle(ChatFormatting.GRAY))
                 .append(tr("report.count", "%s of them, the worst %s", g.things(), Component.empty()
                         .append(place(g.worst().level(), g.worst().blockPos(), teleport))).withStyle(ChatFormatting.GRAY));
@@ -114,16 +127,16 @@ public final class ReportText {
         return Component.literal(rank + ". ").withStyle(ChatFormatting.GRAY)
                 .append(tr("report.chunk", "chunk %s, %s", c.x(), c.z()).withStyle(ChatFormatting.WHITE))
                 .append(" ").append(place(c.level(), c.centre(), teleport))
-                .append(": ").append(cost(perTick))
+                .append(": ").append(cost(perTick, r))
                 .append(Component.literal(", ").withStyle(ChatFormatting.GRAY))
                 .append(tr("report.chunk.top", "%s things, most of it %s (%s)", c.things(), c.topType(), time(r.perTick(c.topTypeNs())))
                         .withStyle(ChatFormatting.GRAY));
     }
 
-    private static Component cost(long perTick) {
+    private static Component cost(long perTick, ScanReport r) {
         ChatFormatting colour = perTick >= 2_500_000 ? ChatFormatting.RED : perTick >= 500_000 ? ChatFormatting.GOLD : ChatFormatting.YELLOW;
         return Component.literal(time(perTick) + "/t").withStyle(colour)
-                .append(Component.literal(" (" + share(perTick) + ")").withStyle(ChatFormatting.GRAY));
+                .append(Component.literal(" (" + share(perTick, r.perTick(r.tickNsTotal)) + ")").withStyle(ChatFormatting.GRAY));
     }
 
     /** "at 120, 64, -30 in overworld", a click teleporting there when {@code teleport}. */

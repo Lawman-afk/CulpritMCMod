@@ -53,9 +53,10 @@ public final class CulpritCommand {
         }
         net.minecraft.server.level.ServerPlayer player = source.getPlayer();
         boolean started = TickScan.start(seconds * 20, report -> {
-            source.sendSuccess(() -> ReportText.summary(report), false);
-            if (player != null && !player.hasDisconnected()) {
-                dev.culprit.net.CulpritNetwork.sendReport(player, report);   // a player with the mod sees it on the world too
+            // A player with the mod gets the report (their client says it in chat and draws it); anyone else the text.
+            boolean sent = player != null && !player.hasDisconnected() && dev.culprit.net.CulpritNetwork.sendReport(player, report);
+            if (!sent) {
+                source.sendSuccess(() -> ReportText.summary(report), false);
             }
         });
         if (!started) {

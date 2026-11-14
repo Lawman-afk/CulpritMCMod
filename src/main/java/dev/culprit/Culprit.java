@@ -5,7 +5,6 @@ import org.slf4j.Logger;
 import com.mojang.logging.LogUtils;
 
 import dev.culprit.command.CulpritCommand;
-import dev.culprit.gametest.CulpritGameTests;
 import dev.culprit.net.CulpritNetwork;
 import dev.culprit.scan.TickScan;
 import net.minecraft.resources.Identifier;
@@ -29,7 +28,6 @@ public class Culprit {
         TickScan.register();
         CulpritCommand.register();
         CulpritNetwork.register(modBus);
-        CulpritGameTests.register(modBus);
     }
 
     public static Identifier id(String path) {

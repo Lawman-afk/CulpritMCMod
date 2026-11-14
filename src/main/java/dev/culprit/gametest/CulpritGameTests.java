@@ -9,11 +9,10 @@ import dev.culprit.Culprit;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.bus.api.IEventBus;
 
 /**
  * GameTest harness: every test, a function run over a structure within a timeout, listed here; how they reach the game
- * is {@link GameTestRegistration}'s (each version its own). Run them all with {@code gradlew runGameTestServer}, or in a
+ * is {@link GameTestRegistration}'s (each version its own). The developer's checks, left out of the released jar. Run them all with {@code gradlew runGameTestServer}, or in a
  * dev world with {@code /test runall}. Test structures are NBT templates under {@code data/culprit/structure/gametest/}.
  */
 public final class CulpritGameTests {
@@ -59,9 +58,5 @@ public final class CulpritGameTests {
     /** Every test, in the order listed. */
     public static List<TestSpec> specs() {
         return Collections.unmodifiableList(SPECS);
-    }
-
-    public static void register(IEventBus modBus) {
-        GameTestRegistration.register(modBus, SPECS);
     }
 }

@@ -52,13 +52,20 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
 ### 4.1 Tick scan (server)
 
 - **Measured**: every block entity tick; every entity tick (a vehicle's own time apart from its passengers'); scheduled
-  block and fluid ticks; block events (pistons, note blocks, chests opening); each chunk's random ticks and weather; mob
-  spawning; and the whole tick's phases (entities, block entities, chunks, scheduled ticks, raids, block events, the
-  rest) against the tick's total time.
+  block and fluid ticks; block events (pistons, note blocks, chests opening); each chunk's random ticks, charged to the
+  kind of block ticked (crops, grass, leaves) in that chunk; each chunk's own upkeep (picking the blocks to tick,
+  snow and ice); mob spawning per chunk.
+- **The whole tick**: the rest of it in parts, each its own time (what ran inside taken out): chunk loading and sending
+  (the chunk source), the levels' upkeep (weather, time, raids, the tick lists), other mods' level tick events, the
+  players' connections, the server's own work (functions, the player list), the autosave; Culprit's own timing,
+  estimated from what measuring one call costs; and what is left, shown as not measured. The parts add up to the
+  tick's total.
 - **Results**: for each thing, its mean time per tick over the scan, its worst single tick and its share of the tick;
   folded by type, by mod and by chunk; with dimension and position.
-- **Started** by `/culprit scan [seconds]` (10 by default, 5 to 120) or the Culprit screen; operators by default (the
-  server's config). Results go to whoever started the scan, and to anyone permitted who asks.
+- **Started** from the scan menu (F8: 10, 30 or 60 seconds, or stop) or by `/culprit scan [seconds]` (10 by default,
+  5 to the server's longest, 120 by default); operators by default (the server's config). The chat says when a scan
+  starts and when it ends, with the tick's mean and worst and the three costliest types; the results (F9) and the
+  world show the rest. Results go to whoever started the scan, and to anyone permitted who asks.
 
 ### 4.2 Frame scan (client)
 
@@ -84,6 +91,9 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
   after some minutes.
 - **The Culprit screen**: Ticks, Frames and Chunks tabs; lists sorted and grouped by thing, type, mod or chunk; search;
   a click marks the thing on the world with an arrow towards it; teleport for operators; copy a summary.
+- **Built for the tick scan (2026-11-14)**: the results screen (F9) opens on a Tick tab, a bar of the whole tick by part
+  with every part listed, then Things, Types, Mods (the game's own work as "(the game)" lines, so the tab adds up to
+  the tick) and Chunks. Both keys can be changed in Controls.
 - **Commands** for vanilla clients and server consoles: `/culprit scan`, `stop`, `top`, `chunks`, `export`; text
   results with click-to-teleport for operators.
 - **Export**: a report file (Markdown and JSON) in the game folder, for sharing with a pack's makers.
@@ -107,8 +117,10 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
 | Entities | `ServerLevel.tickNonPassenger(Entity)` and `tickPassenger(Entity, Entity)`: wrapped |
 | Scheduled ticks | `ServerLevel.tickBlock(BlockPos, Block)`, `tickFluid(BlockPos, Fluid)` (called by `LevelTicks.tick`) |
 | Block events | `ServerLevel.doBlockEvent(BlockEventData)` |
-| Random ticks, weather | `ServerLevel.tickChunk(LevelChunk, int)` |
-| Whole tick | `ServerLevel.tick` phases; `MinecraftServer` tick time |
+| A chunk's upkeep | `ServerLevel.tickChunk(LevelChunk, int)`, its random ticks taken out |
+| Random ticks | the `BlockState.randomTick` and `FluidState.randomTick` calls in `tickChunk` (26.3; to read in 1.21.1 and 1.20.1 when porting) |
+| Mob spawning | `NaturalSpawner.spawnForChunk` in `ServerChunkCache.tickSpawningChunk` (26.3; to read in the ports) |
+| Whole tick | the tick's total between NeoForge's server tick events; parts: `ServerChunkCache.tick`, `ServerLevel.tick`, `MinecraftServer.tickChildren`, `tickConnection`, `autoSave`, and NeoForge's level tick events in `tickChildren` (26.3; to read in the ports) |
 | Tickets | 26.3: `TicketStorage.tickets` (`Long2ObjectOpenHashMap<List<Ticket>>`, types in a registry) and NeoForge's `ForcedChunkManager.TicketTracker` (block and entity owners per controller); 1.21.1 and 1.20.1: `DistanceManager.tickets` (`SortedArraySet<Ticket<?>>`), NeoForge's `ForcedChunkManager` and Forge's `ForgeChunkManager` owners |
 | Frames, 26.3 | `BlockEntityRenderDispatcher.tryExtractRenderState` and `submit`, `EntityRenderDispatcher.extractEntity` and `submit`; the batched drawing in `FeatureRenderDispatcher` (§5.3) |
 | Frames, 1.21.1 and 1.20.1 | `BlockEntityRenderDispatcher.render`, `EntityRenderDispatcher.render`, `ParticleEngine.render`: they build their vertices as they are called; Sodium's and Embeddium's loops call the same dispatchers |
@@ -120,6 +132,9 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
   (the thing's slot found once per thing through an identity map); nothing allocated per tick or per frame; the
   timer's own cost measured when a scan starts and taken off; nested calls (passengers in vehicles, a block entity that
   ticks another) counted once, each to its own.
+- **Culprit's own cost while scanning**: what measuring one call costs in all (both timings, finding the slot, adding)
+  is measured as a scan starts, and the report shows the calls times that cost as its own part of the tick, so the
+  tick's parts add up without hiding what the scan itself adds.
 - **Budgets**: idle cost too small to measure; under 5 % added to the tick while scanning 10,000 block entities; the
   overlay under 0.5 ms a frame for 2,000 boxes.
 - **Measured (2026-11-14)**, the idle cost: a plot of 1,792 hoppers and 200 pigs (about 2,000 hooked calls a tick),
@@ -156,9 +171,12 @@ cost nothing); ModernFix.
 
 ## 7. Testing
 
-- **GameTests**: a hopper chain, a crowd of mobs, a redstone clock and a forced chunk, each found by a scan at its place
-  with its type and mod; the ticket inspector naming `/forceload` and its chunk; the idle hooks costing nothing
-  measurable.
+- **GameTests**, the developer's checks: left out of the released jar with their structures, and registered only in
+  the dev runs; the scan itself only measures what is in a player's world and adds nothing to it. Built: hoppers,
+  pigs, an observer clock and a piston each found at its place with its kind, type and mod, every total checked
+  against the others and the tick's parts against the tick; nested time; passengers; random ticks (a field of grass
+  with the random tick speed raised); the commands; the idle cost (`-Pbench`). To come: a forced chunk named by the
+  ticket inspector.
 - **The prepared world "Culprit Lab"** (a dev-only run, never in the jar): a wall of hoppers, a mob crowd, item piles,
   a redstone clock, a forest of signs and banners (frames), item frames with maps, armour stands, a beacon, a
   force-loaded chunk far away, a portal; signs saying what to try. Photographers take the overlay's pictures.
@@ -176,3 +194,7 @@ cost nothing); ModernFix.
 | 2026-11-14 | The tick scan built (as DESIGN §4.1 and §5.2, PLAYBOOK has how): `@WrapOperation` round block entity tickers, `@WrapMethod` on the server level's entity, passenger, scheduled tick, block event and chunk methods; per-thing slots in primitive arrays; nested calls taken out; the timer's cost taken off. Commands only for now; its GameTest finds hoppers, pigs, an observer clock, a piston and the plot's chunk at their places. |
 | 2026-11-14 | The results reach a player's client and the world (DESIGN §4.4, §5.4): three optional payloads (report, status, scan request; operators only); the overlay drawn after the level, as Ground Burst's effects are, so shader packs and Distant Horizons leave it alone (boxes in the plasma colour scale, labels over the costliest close ones, chunk tiles at the feet, the screen's pick marked by a beam); the Culprit screen on F7 (summary, things, types, mods, chunks, scan, stop, show or hide, teleport); the Lab world built by a dev-only run and photographed. |
 | 2026-11-14 | After the first pictures of the overlay: chunk outlines on the ground (not at the player's feet), labels kept apart as seen from the camera, the player's own box left out, cheap things fainter; the colour scale turned round so the costliest looks the most alarming (pale yellow, orange, red, magenta); the screen fitted to any window. Server settings: who may scan (operators by default) and the longest scan. The scanning tests each run alone (two scans raced in one batch). |
+| 2026-11-14 | The user asked why the screen said "3.03 ms" of a 3.86 ms tick, and why the "By mod" list came to only 2.43 ms: the scan measured only the things, and chunk ticks belonged to no mod. Now the whole tick is accounted for (§4.1, §5.2): the server's parts, Culprit's own timing and what is left as not measured; a chunk's random ticks split from its upkeep and charged to the kind of block ticked (and so to its mod); mob spawning measured; the Mods tab lists the game's own work as "(the game)" lines, so every tab adds up to the tick. |
+| 2026-11-14 | Keys, the user's idea ("f7 to open the start menu, f8 to read the last test result"; F7 is a popular lighting mod's, so keys must be changeable): F8 opens the scan menu, F9 the results, both changeable. F7 is Light Overlay's; F8 is free in Minecraft on every version (the smooth camera has no key); F9 and F10 are used only by small mods. The chat says when a scan starts and when it ends, with the quick results. |
+| 2026-11-14 | After the pictures of the new screens: a share is of the server's tick (the Tick and Mods tabs add up to 100 %), not of the 50 ms a tick may take (the summary gives that); things are named as the game names them in the player's language (Villager, Grass Block, Water), from the registries by kind; a place's block entities are one thing (a piston's moving block is a new block entity at every push: 536 "pistons" for 8); a whole chunk's things are placed as "chunk x, z" and teleported to on the ground; the Mods tab's own lines are one "The game's own work", Culprit's own timing and Not measured. |
+| 2026-11-14 | The GameTests (and their structures) are left out of the released jar and registered only in the dev runs: the user asked whether the test is part of the mod; it is the developer's check, and the scan only measures what is already in the world. A stop asked for inside a tick ends with that tick, so the parts always fit in the ticks. |

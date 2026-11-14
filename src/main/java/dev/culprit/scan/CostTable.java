@@ -47,6 +47,12 @@ final class CostTable {
     private int lastLevelIndex;
     final List<String> typeNames = new ArrayList<>();
     private final Object2IntOpenHashMap<String> typeIds = new Object2IntOpenHashMap<>();
+    /** Blocks and fluids to their type number, found once each (random ticks look theirs up on every call). */
+    private final Reference2IntOpenHashMap<Object> typeOfObject = new Reference2IntOpenHashMap<>();
+
+    /** The tick's phases: their own time, summed over the scan, and how many times they were timed. */
+    final long[] phaseNs = new long[Phase.COUNT];
+    long phaseCalls;
 
     private final IntArrayList touched = new IntArrayList();
     /** The tick being measured, counted from 1 (a slot's lastTick 0 means never). */
@@ -55,6 +61,29 @@ final class CostTable {
     CostTable() {
         byRef.defaultReturnValue(-1);
         typeIds.defaultReturnValue(-1);
+        typeOfObject.defaultReturnValue(-1);
+    }
+
+    /** The type number of a block or fluid, by its registry name the first time. */
+    int typeIdOf(Object blockOrFluid) {
+        int id = typeOfObject.getInt(blockOrFluid);
+        if (id < 0) {
+            String name = blockOrFluid instanceof net.minecraft.world.level.block.Block block
+                    ? net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString()
+                    : net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey((net.minecraft.world.level.material.Fluid) blockOrFluid).toString();
+            id = typeId(name);
+            typeOfObject.put(blockOrFluid, id);
+        }
+        return id;
+    }
+
+    /** Every measured call, things and phases: what Culprit's own timing cost is estimated from. */
+    long calls() {
+        long sum = phaseCalls;
+        for (int s = 0; s < size; s++) {
+            sum += calls[s];
+        }
+        return sum;
     }
 
     int levelIndex(ServerLevel level) {
@@ -96,6 +125,26 @@ final class CostTable {
     /** The slot of a thing known by position (scheduled ticks, block events, chunks), or -1. */
     int slotAt(int levelIndex, byte kind, long key) {
         return byPos.get(levelIndex)[kind].get(key);
+    }
+
+    /**
+     * The slot of a block entity's ticker seen for the first time: its place's slot if the same type ticked there
+     * before (a piston's moving block is a new block entity at every push; a block broken and placed again), so a place
+     * is one thing; else a new slot. -1 once the table is full.
+     */
+    int blockEntitySlot(int levelIndex, Object ticker, long pos, int type) {
+        Long2IntOpenHashMap places = byPos.get(levelIndex)[Kind.BLOCK_ENTITY];
+        int slot = places.get(pos);
+        if (slot >= 0 && this.type[slot] == type) {
+            byRef.put(ticker, slot);
+            ref[slot] = ticker;
+            return slot;
+        }
+        slot = newSlot(Kind.BLOCK_ENTITY, levelIndex, pos, pos, type, ticker);
+        if (slot >= 0) {
+            places.put(pos, slot);
+        }
+        return slot;
     }
 
     /** A new slot for a thing; -1 once the table is full. {@code ref} null means the thing is known by position. */

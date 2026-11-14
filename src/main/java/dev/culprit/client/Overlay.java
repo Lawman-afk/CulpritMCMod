@@ -168,7 +168,7 @@ public final class Overlay {
         boxes = 0;
         double range2 = RANGE * RANGE;
         for (int i = 0; i < r.things && boxes < MAX_BOXES; i++) {
-            if (r.dim[i] != dim || r.kind[i] == Kind.CHUNK) {
+            if (r.dim[i] != dim || Kind.isChunkWide(r.kind[i])) {
                 continue;
             }
             long perTick = r.perTick(r.total[i]);
@@ -324,7 +324,7 @@ public final class Overlay {
         int things = 0;
         double range2 = LABEL_RANGE * LABEL_RANGE;
         for (int i = 0; i < r.things && things < MAX_LABELS; i++) {
-            if (r.dim[i] != dim || r.kind[i] == Kind.CHUNK || i == markedThing || isViewer(r, i)) {
+            if (r.dim[i] != dim || Kind.isChunkWide(r.kind[i]) || i == markedThing || isViewer(r, i)) {
                 continue;
             }
             if (r.perTick(r.total[i]) < FLOOR_NS) {
@@ -361,7 +361,7 @@ public final class Overlay {
     private static FormattedCharSequence name(ReportData r, int i) {
         FormattedCharSequence[] cache = labelName;
         if (cache[i] == null) {
-            String shortName = shortName(r.names[r.type[i]]);
+            String shortName = Names.of(r.names[r.type[i]], r.kind[i]);
             Component text = Component.literal(shortName);
             if (r.kind[i] != Kind.BLOCK_ENTITY && r.kind[i] != Kind.ENTITY) {
                 text = Component.literal(shortName + " (").append(Component.translatableWithFallback("culprit.kind.one." + Kind.key(r.kind[i]),
@@ -377,7 +377,7 @@ public final class Overlay {
         if (cache[i] == null) {
             long perTick = r.perTick(r.total[i]);
             cache[i] = Component.literal(ReportText.time(perTick) + "/t").withColor(Heat.rgb(Heat.of(perTick)))
-                    .append(Component.literal("  " + ReportText.share(perTick)).withColor(0xC8C8C8)).getVisualOrderText();
+                    .append(Component.literal("  " + ReportText.share(r.total[i], r.tickNsTotal)).withColor(0xC8C8C8)).getVisualOrderText();
         }
         return cache[i];
     }
@@ -389,15 +389,7 @@ public final class Overlay {
     private static FormattedCharSequence chunkCost(ReportData r, int i) {
         long perTick = r.perTick(r.chunkTotal[i]);
         return Component.literal(ReportText.time(perTick) + "/t").withColor(Heat.rgb(Heat.of(perTick)))
-                .append(Component.literal("  " + ReportText.share(perTick)).withColor(0xC8C8C8)).getVisualOrderText();
-    }
-
-    /** A thing's type as shown: vanilla ones without "minecraft:". */
-    public static String shortName(String type) {
-        if (type.equals("minecraft:chunk")) {
-            return "chunk ticks";                       // a chunk's own tick: random ticks and weather
-        }
-        return type.startsWith("minecraft:") ? type.substring(10) : type;
+                .append(Component.literal("  " + ReportText.share(r.chunkTotal[i], r.tickNsTotal)).withColor(0xC8C8C8)).getVisualOrderText();
     }
 
     /** A label facing the camera at (x, y, z), unless another is already too close to it seen from the camera. */

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import dev.culprit.scan.Kind;
+import dev.culprit.scan.Phase;
 import dev.culprit.scan.ScanReport;
 import net.minecraft.network.FriendlyByteBuf;
 
@@ -27,6 +28,9 @@ public final class ReportData {
     /** How many things the scan measured in all (only the costliest are sent). */
     public int thingCount;
     public final long[] kindNs = new long[Kind.COUNT];
+    /** The tick's phases' own time ({@link Phase}), and Culprit's own timing, estimated. */
+    public final long[] phaseNs = new long[Phase.COUNT];
+    public long selfNs;
     public String[] dims = new String[0];
     public String[] names = new String[0];
 
@@ -54,6 +58,7 @@ public final class ReportData {
     public int[] modCount;
     public int[] modWorstDim;
     public long[] modWorstPos;
+    public byte[] modWorstKind;
 
     public int chunks;
     public int[] chunkDim;
@@ -63,6 +68,7 @@ public final class ReportData {
     public int[] chunkCount;
     public int[] chunkTop;
     public long[] chunkTopNs;
+    public byte[] chunkTopKind;
 
     public long perTick(long totalNs) {
         return ticks == 0 ? 0 : totalNs / ticks;
@@ -76,6 +82,19 @@ public final class ReportData {
         return sum;
     }
 
+    public long phasesNs() {
+        long sum = 0;
+        for (long ns : phaseNs) {
+            sum += ns;
+        }
+        return sum;
+    }
+
+    /** The part of the ticks nothing measured covers. */
+    public long unaccountedNs() {
+        return Math.max(0, tickNsTotal - measuredNs() - phasesNs() - selfNs);
+    }
+
     public static ReportData of(ScanReport r) {
         ReportData d = new ReportData();
         d.ticks = r.ticks;
@@ -84,6 +103,8 @@ public final class ReportData {
         d.incomplete = r.incomplete;
         d.thingCount = r.things.size();
         System.arraycopy(r.kindNs, 0, d.kindNs, 0, Kind.COUNT);
+        System.arraycopy(r.phaseNs, 0, d.phaseNs, 0, Phase.COUNT);
+        d.selfNs = r.selfNs;
         Table dims = new Table();
         Table names = new Table();
 
@@ -131,6 +152,7 @@ public final class ReportData {
         d.modCount = new int[d.mods];
         d.modWorstDim = new int[d.mods];
         d.modWorstPos = new long[d.mods];
+        d.modWorstKind = new byte[d.mods];
         for (int i = 0; i < d.mods; i++) {
             ScanReport.Group g = r.mods.get(i);
             d.modName[i] = names.id(g.name());
@@ -138,6 +160,7 @@ public final class ReportData {
             d.modCount[i] = g.things();
             d.modWorstDim[i] = dims.id(g.worst().level().identifier().toString());
             d.modWorstPos[i] = g.worst().pos();
+            d.modWorstKind[i] = g.worst().kind();
         }
 
         d.chunks = Math.min(MAX_CHUNKS, r.chunks.size());
@@ -148,6 +171,7 @@ public final class ReportData {
         d.chunkCount = new int[d.chunks];
         d.chunkTop = new int[d.chunks];
         d.chunkTopNs = new long[d.chunks];
+        d.chunkTopKind = new byte[d.chunks];
         for (int i = 0; i < d.chunks; i++) {
             ScanReport.ChunkGroup c = r.chunks.get(i);
             d.chunkDim[i] = dims.id(c.level().identifier().toString());
@@ -157,6 +181,7 @@ public final class ReportData {
             d.chunkCount[i] = c.things();
             d.chunkTop[i] = names.id(c.topType());
             d.chunkTopNs[i] = c.topTypeNs();
+            d.chunkTopKind[i] = (byte) c.topKind();
         }
         d.dims = dims.list.toArray(String[]::new);
         d.names = names.list.toArray(String[]::new);
@@ -172,6 +197,10 @@ public final class ReportData {
         for (long ns : kindNs) {
             buf.writeVarLong(ns);
         }
+        for (long ns : phaseNs) {
+            buf.writeVarLong(ns);
+        }
+        buf.writeVarLong(selfNs);
         strings(buf, dims);
         strings(buf, names);
         buf.writeVarInt(things);
@@ -201,6 +230,7 @@ public final class ReportData {
             buf.writeVarInt(modCount[i]);
             buf.writeVarInt(modWorstDim[i]);
             buf.writeLong(modWorstPos[i]);
+            buf.writeByte(modWorstKind[i]);
         }
         buf.writeVarInt(chunks);
         for (int i = 0; i < chunks; i++) {
@@ -211,6 +241,7 @@ public final class ReportData {
             buf.writeVarInt(chunkCount[i]);
             buf.writeVarInt(chunkTop[i]);
             buf.writeVarLong(chunkTopNs[i]);
+            buf.writeByte(chunkTopKind[i]);
         }
     }
 
@@ -224,6 +255,10 @@ public final class ReportData {
         for (int k = 0; k < Kind.COUNT; k++) {
             d.kindNs[k] = buf.readVarLong();
         }
+        for (int p = 0; p < Phase.COUNT; p++) {
+            d.phaseNs[p] = buf.readVarLong();
+        }
+        d.selfNs = buf.readVarLong();
         d.dims = strings(buf);
         d.names = strings(buf);
         d.things = Math.min(buf.readVarInt(), MAX_THINGS);
@@ -266,12 +301,14 @@ public final class ReportData {
         d.modCount = new int[d.mods];
         d.modWorstDim = new int[d.mods];
         d.modWorstPos = new long[d.mods];
+        d.modWorstKind = new byte[d.mods];
         for (int i = 0; i < d.mods; i++) {
             d.modName[i] = buf.readVarInt();
             d.modTotal[i] = buf.readVarLong();
             d.modCount[i] = buf.readVarInt();
             d.modWorstDim[i] = buf.readVarInt();
             d.modWorstPos[i] = buf.readLong();
+            d.modWorstKind[i] = buf.readByte();
         }
         d.chunks = Math.min(buf.readVarInt(), MAX_CHUNKS);
         d.chunkDim = new int[d.chunks];
@@ -281,6 +318,7 @@ public final class ReportData {
         d.chunkCount = new int[d.chunks];
         d.chunkTop = new int[d.chunks];
         d.chunkTopNs = new long[d.chunks];
+        d.chunkTopKind = new byte[d.chunks];
         for (int i = 0; i < d.chunks; i++) {
             d.chunkDim[i] = buf.readVarInt();
             d.chunkX[i] = buf.readVarInt();
@@ -289,6 +327,7 @@ public final class ReportData {
             d.chunkCount[i] = buf.readVarInt();
             d.chunkTop[i] = buf.readVarInt();
             d.chunkTopNs[i] = buf.readVarLong();
+            d.chunkTopKind[i] = buf.readByte();
         }
         return d;
     }

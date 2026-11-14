@@ -37,8 +37,8 @@ public final class ScanReport {
     /** Things of one type (and kind) or one mod: their total, how many, and the costliest. */
     public record Group(String name, int kind, long totalNs, int things, Thing worst) {}
 
-    /** One chunk: its total, how many things in it, and the type costing most there. */
-    public record ChunkGroup(ResourceKey<Level> level, int x, int z, long totalNs, int things, String topType, long topTypeNs) {
+    /** One chunk: its total, how many things in it, and the type (of a kind) costing most there. */
+    public record ChunkGroup(ResourceKey<Level> level, int x, int z, long totalNs, int things, String topType, int topKind, long topTypeNs) {
         public BlockPos centre() {
             return new BlockPos((x << 4) + 8, 64, (z << 4) + 8);
         }
@@ -52,13 +52,19 @@ public final class ScanReport {
     public final boolean incomplete;
     /** Total measured time per {@link Kind}. */
     public final long[] kindNs = new long[Kind.COUNT];
+    /** Total own time per {@link Phase} of the tick. */
+    public final long[] phaseNs = new long[Phase.COUNT];
+    /** Culprit's own timing, estimated: every measured call times what measuring one costs. */
+    public final long selfNs;
     public final List<Thing> things;
     public final List<Group> types;
     public final List<Group> mods;
     public final List<ChunkGroup> chunks;
 
-    private ScanReport(int ticks, long tickNsTotal, long tickNsMax, long startedAtMillis, boolean incomplete,
+    private ScanReport(int ticks, long tickNsTotal, long tickNsMax, long startedAtMillis, boolean incomplete, long[] phaseNs, long selfNs,
                        List<Thing> things, List<Group> types, List<Group> mods, List<ChunkGroup> chunks) {
+        System.arraycopy(phaseNs, 0, this.phaseNs, 0, Phase.COUNT);
+        this.selfNs = selfNs;
         this.ticks = ticks;
         this.tickNsTotal = tickNsTotal;
         this.tickNsMax = tickNsMax;
@@ -78,6 +84,7 @@ public final class ScanReport {
         return ticks == 0 ? 0 : totalNs / ticks;
     }
 
+    /** What the things took: every measured thing's own time. */
     public long measuredNs() {
         long sum = 0;
         for (long ns : kindNs) {
@@ -86,12 +93,26 @@ public final class ScanReport {
         return sum;
     }
 
+    /** What the tick's phases took, their own time. */
+    public long phasesNs() {
+        long sum = 0;
+        for (long ns : phaseNs) {
+            sum += ns;
+        }
+        return sum;
+    }
+
+    /** The part of the ticks nothing measured covers: tick events run outside the measured phases, and the like. */
+    public long unaccountedNs() {
+        return Math.max(0, tickNsTotal - measuredNs() - phasesNs() - selfNs);
+    }
+
     public static String modOf(String type) {
         int colon = type.indexOf(':');
         return colon < 0 ? "minecraft" : type.substring(0, colon);
     }
 
-    static ScanReport of(CostTable t, int ticks, long tickNsTotal, long tickNsMax, long startedAtMillis) {
+    static ScanReport of(CostTable t, int ticks, long tickNsTotal, long tickNsMax, long startedAtMillis, long selfNs) {
         List<Thing> things = new ArrayList<>(t.size);
         for (int s = 0; s < t.size; s++) {
             long pos = t.pos[s];
@@ -113,8 +134,8 @@ public final class ScanReport {
         for (Thing th : things) {
             String typeKey = th.kind() + "|" + th.type();
             add(typeSums, typeWorst, typeKey, th);
-            if (th.kind() != Kind.CHUNK) {
-                add(modSums, modWorst, th.mod(), th);
+            if (!Kind.isGames(th.kind())) {
+                add(modSums, modWorst, th.mod(), th);       // random ticks go to their block's mod
             }
             BlockPos p = th.blockPos();
             int cx = p.getX() >> 4;
@@ -136,7 +157,7 @@ public final class ScanReport {
         types.sort(Comparator.comparingLong(Group::totalNs).reversed());
         mods.sort(Comparator.comparingLong(Group::totalNs).reversed());
         chunks.sort(Comparator.comparingLong(ChunkGroup::totalNs).reversed());
-        return new ScanReport(ticks, tickNsTotal, tickNsMax, startedAtMillis, t.full, Collections.unmodifiableList(things),
+        return new ScanReport(ticks, tickNsTotal, tickNsMax, startedAtMillis, t.full, t.phaseNs, selfNs, Collections.unmodifiableList(things),
                 Collections.unmodifiableList(types), Collections.unmodifiableList(mods), Collections.unmodifiableList(chunks));
     }
 
@@ -164,7 +185,7 @@ public final class ScanReport {
         void add(Thing th) {
             total += th.totalNs();
             count++;
-            byType.computeIfAbsent(th.type(), k -> new long[1])[0] += th.totalNs();
+            byType.computeIfAbsent(th.kind() + "|" + th.type(), k -> new long[1])[0] += th.totalNs();
         }
 
         ChunkGroup group() {
@@ -176,7 +197,9 @@ public final class ScanReport {
                     topNs = e.getValue()[0];
                 }
             }
-            return new ChunkGroup(level, x, z, total, count, top, Math.max(0, topNs));
+            int bar = top.indexOf('|');
+            int topKind = bar < 0 ? -1 : Integer.parseInt(top.substring(0, bar));
+            return new ChunkGroup(level, x, z, total, count, top.substring(bar + 1), topKind, Math.max(0, topNs));
         }
     }
 

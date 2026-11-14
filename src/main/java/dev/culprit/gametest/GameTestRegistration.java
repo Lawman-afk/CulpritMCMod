@@ -1,7 +1,9 @@
 package dev.culprit.gametest;
 
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import dev.culprit.Culprit;
@@ -11,48 +13,63 @@ import net.minecraft.gametest.framework.FunctionGameTestInstance;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestData;
 import net.minecraft.gametest.framework.TestEnvironmentDefinition;
-import net.neoforged.bus.api.IEventBus;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Rotation;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.neoforge.registries.RegisterEvent;
 
 /**
- * How the tests {@link CulpritGameTests} lists reach the game on 26.3: each test's function in the vanilla TEST_FUNCTION
- * registry, and a test instance (function, structure, timeout) on {@link RegisterGameTestsEvent}. (The backports will
- * have their own.)
+ * How the tests {@link CulpritGameTests} lists reach the game on 26.3: each test's function in the vanilla
+ * TEST_FUNCTION registry, and a test instance (function, structure, timeout) on {@link RegisterGameTestsEvent}. (The
+ * backports will have their own.)
+ * <p>
+ * The tests are the developer's checks, not part of the mod: this package and the test structures are left out of the
+ * released jar (build.gradle's jar task), and nothing in the jar names them; the class is found by its annotation in
+ * the dev runs, and does anything only when the run names the mod in {@code neoforge.enabledGameTestNamespaces}.
  */
-final class GameTestRegistration {
-    private static final DeferredRegister<Consumer<GameTestHelper>> FUNCTIONS = DeferredRegister.create(Registries.TEST_FUNCTION, Culprit.MODID);
-
-    private record Registered(CulpritGameTests.TestSpec spec, DeferredHolder<Consumer<GameTestHelper>, Consumer<GameTestHelper>> function) {}
-
-    private static final List<Registered> REGISTERED = new ArrayList<>();
+@EventBusSubscriber(modid = Culprit.MODID)
+public final class GameTestRegistration {
+    /** The dev runs (build.gradle) name the mod here; a player's game never does. */
+    private static final boolean ENABLED = Arrays.asList(System.getProperty("neoforge.enabledGameTestNamespaces", "").split(","))
+            .contains(Culprit.MODID);
 
     private GameTestRegistration() {}
 
-    static void register(IEventBus modBus, List<CulpritGameTests.TestSpec> specs) {
-        for (CulpritGameTests.TestSpec spec : specs) {
-            REGISTERED.add(new Registered(spec, FUNCTIONS.register(spec.name(), spec::body)));
+    @SubscribeEvent
+    public static void registerFunctions(RegisterEvent event) {
+        if (!ENABLED) {
+            return;
         }
-        FUNCTIONS.register(modBus);
-        modBus.addListener(GameTestRegistration::registerTests);
+        event.register(Registries.TEST_FUNCTION, helper -> {
+            for (CulpritGameTests.TestSpec spec : CulpritGameTests.specs()) {
+                Consumer<GameTestHelper> body = spec.body();
+                helper.register(Culprit.id(spec.name()), body);
+            }
+        });
     }
 
-    private static void registerTests(RegisterGameTestsEvent event) {
-        java.util.Map<String, Holder<TestEnvironmentDefinition<?>>> environments = new java.util.HashMap<>();
+    @SubscribeEvent
+    public static void registerTests(RegisterGameTestsEvent event) {
+        if (!ENABLED) {
+            return;
+        }
+        Map<String, Holder<TestEnvironmentDefinition<?>>> environments = new HashMap<>();
         // -PonlyTests=<name>,<name>: only those tests are set up (a quicker run).
         String only = System.getProperty("culprit.onlyTests", "");
-        List<String> chosen = only.isBlank() ? List.of() : java.util.Arrays.asList(only.split(","));
-        for (Registered r : REGISTERED) {
-            CulpritGameTests.TestSpec spec = r.spec();
+        List<String> chosen = only.isBlank() ? List.of() : Arrays.asList(only.split(","));
+        for (CulpritGameTests.TestSpec spec : CulpritGameTests.specs()) {
             if (!chosen.isEmpty() && !chosen.contains(spec.name())) {
                 continue;
             }
             // One environment per batch: the runner runs each environment's tests as a batch, one batch after another.
             Holder<TestEnvironmentDefinition<?>> environment = environments.computeIfAbsent(spec.batch(), b -> event.registerEnvironment(Culprit.id(b)));
-            TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(environment, net.minecraft.world.level.Level.OVERWORLD,
-                    spec.structure(), spec.maxTicks(), 0, true, net.minecraft.world.level.block.Rotation.NONE, false, 1, 1, spec.sky(), 0);
-            event.registerTest(r.function().getId(), new FunctionGameTestInstance(r.function().key(), data));
+            TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(environment, Level.OVERWORLD, spec.structure(), spec.maxTicks(), 0,
+                    true, Rotation.NONE, false, 1, 1, spec.sky(), 0);
+            ResourceKey<Consumer<GameTestHelper>> function = ResourceKey.create(Registries.TEST_FUNCTION, Culprit.id(spec.name()));
+            event.registerTest(Culprit.id(spec.name()), new FunctionGameTestInstance(function, data));
         }
     }
 }

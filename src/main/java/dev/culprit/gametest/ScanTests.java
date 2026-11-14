@@ -1,9 +1,13 @@
 package dev.culprit.gametest;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
+import dev.culprit.Culprit;
+
 import dev.culprit.scan.Kind;
+import dev.culprit.scan.Phase;
 import dev.culprit.scan.Probe;
 import dev.culprit.scan.ScanReport;
 import dev.culprit.scan.TickScan;
@@ -21,6 +25,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ObserverBlock;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.level.gamerules.GameRules;
 
 /**
  * The tick scan's tests (DESIGN §7). Each plants lag sources whose places and kinds are known, scans, and checks the
@@ -29,6 +34,7 @@ import net.minecraft.world.level.block.piston.PistonBaseBlock;
  */
 final class ScanTests {
     private static final int SCAN_TICKS = 40;
+    private static final int RANDOM_SCAN_TICKS = 20, RANDOM_TICK_SPEED = 200;
 
     private ScanTests() {}
 
@@ -50,6 +56,26 @@ final class ScanTests {
             // check fails the test.
             helper.runAfterDelay(10, () -> whenNoScan(helper, () -> helper.assertTrue(
                     TickScan.start(SCAN_TICKS, report -> helper.runAfterDelay(1, () -> checkSources(helper, report))), "the scan starts")));
+        });
+
+        // Random ticks: a field of grass with the random tick speed raised for the scan. They are charged to the grass
+        // in the plot's chunks, as random ticks, a type of their own, apart from the chunks' upkeep.
+        CulpritGameTests.testAlone("scan_charges_random_ticks", CulpritGameTests.FLOOR_16, 300, helper -> {
+            for (int x = 0; x < 16; x++) {
+                for (int z = 0; z < 16; z++) {
+                    helper.setBlock(x, 1, z, Blocks.GRASS_BLOCK);
+                }
+            }
+            GameRules rules = helper.getLevel().getGameRules();
+            MinecraftServer server = helper.getLevel().getServer();
+            int speed = rules.get(GameRules.RANDOM_TICK_SPEED);
+            helper.runAfterDelay(5, () -> whenNoScan(helper, () -> {
+                helper.assertTrue(TickScan.start(RANDOM_SCAN_TICKS, report -> {
+                    rules.set(GameRules.RANDOM_TICK_SPEED, speed, server);
+                    helper.runAfterDelay(1, () -> checkRandomTicks(helper, report));
+                }), "the scan starts");
+                rules.set(GameRules.RANDOM_TICK_SPEED, RANDOM_TICK_SPEED, server);
+            }));
         });
 
         // The arithmetic of nested calls: a measured call inside another is charged its own time, and the outer one
@@ -169,6 +195,12 @@ final class ScanTests {
         helper.assertTrue(r.thingsWithin(level, Kind.BLOCK_EVENT, min, max).stream()
                         .anyMatch(t -> t.type().equals("minecraft:piston") && t.blockPos().equals(piston)),
                 "the piston's block events are found at the piston");
+        // The piston's moving block is a new block entity at every push: a place's block entities are one thing.
+        List<ScanReport.Thing> moving = r.thingsWithin(level, Kind.BLOCK_ENTITY, min, max).stream()
+                .filter(t -> t.type().equals("minecraft:piston")).toList();
+        helper.assertTrue(!moving.isEmpty(), "the piston's moving block is measured");
+        helper.assertTrue(moving.stream().map(ScanReport.Thing::pos).distinct().count() == moving.size(),
+                "each place's moving block is one thing, not one a push (" + moving.size() + " things)");
 
         // Chunk ticks: the plot's chunk, measured and listed.
         ChunkPos chunk = ChunkPos.containing(observerA);
@@ -186,10 +218,22 @@ final class ScanTests {
         helper.assertTrue(r.measuredNs() == things, "the kinds add up to the things");
         helper.assertTrue(r.types.stream().mapToLong(ScanReport.Group::totalNs).sum() == things, "the types add up to the things");
         helper.assertTrue(r.chunks.stream().mapToLong(ScanReport.ChunkGroup::totalNs).sum() == things, "the chunks add up to the things");
-        helper.assertTrue(r.mods.stream().mapToLong(ScanReport.Group::totalNs).sum() + r.kindNs[Kind.CHUNK] == things,
-                "the mods add up to the things (chunk ticks apart)");
+        helper.assertTrue(r.mods.stream().mapToLong(ScanReport.Group::totalNs).sum() + r.kindNs[Kind.CHUNK] + r.kindNs[Kind.SPAWNING] == things,
+                "the mods add up to the things (the game's chunk upkeep and mob spawning apart)");
         // Each thing charged only its own time: together they fit inside the ticks they were measured in.
         helper.assertTrue(r.measuredNs() <= r.tickNsTotal, "what was measured (" + r.measuredNs() + " ns) fits in the ticks (" + r.tickNsTotal + " ns)");
+
+        // The rest of the tick: the server's own parts, each charged its own time (what ran inside taken out); with
+        // the things they fit in the ticks, and they cover nearly all of it.
+        helper.assertTrue(r.phaseNs[Phase.LEVEL] > 0 && r.phaseNs[Phase.SERVER] > 0 && r.phaseNs[Phase.CHUNK_SOURCE] > 0,
+                "the levels' upkeep, the server's own work and the chunks' loading were timed: " + Arrays.toString(r.phaseNs));
+        long accounted = r.measuredNs() + r.phasesNs();
+        helper.assertTrue(accounted <= r.tickNsTotal, "the things and parts (" + accounted + " ns) fit in the ticks (" + r.tickNsTotal + " ns)");
+        double covered = (double) (accounted + r.selfNs) / r.tickNsTotal;
+        Culprit.LOGGER.info("scan_finds_lag_sources: {} ns a tick: things {}, parts {} {}, Culprit's timing {}, not measured {} ({}% covered)",
+                r.perTick(r.tickNsTotal), r.perTick(r.measuredNs()), r.perTick(r.phasesNs()), Arrays.toString(r.phaseNs), r.perTick(r.selfNs),
+                r.perTick(r.unaccountedNs()), Math.round(covered * 100));
+        helper.assertTrue(covered >= 0.75, "the things, the parts and Culprit's timing cover most of the tick, not " + Math.round(covered * 100) + "%");
         helper.assertTrue(r.tickNsMax >= r.perTick(r.tickNsTotal), "the worst tick is at least the mean");
 
         // A long scan stopped early reports the ticks it had and leaves the hooks idle.
@@ -199,6 +243,33 @@ final class ScanTests {
             helper.succeed();
         })), "the second scan starts");
         helper.runAfterDelay(12, () -> helper.assertTrue(TickScan.stopNow(true), "the long scan stops"));
+    }
+
+    private static void checkRandomTicks(GameTestHelper helper, ScanReport r) {
+        BlockPos a = helper.absolutePos(new BlockPos(0, 1, 0));
+        BlockPos b = helper.absolutePos(new BlockPos(15, 1, 15));
+        int minX = Math.min(a.getX(), b.getX()) >> 4, maxX = Math.max(a.getX(), b.getX()) >> 4;
+        int minZ = Math.min(a.getZ(), b.getZ()) >> 4, maxZ = Math.max(a.getZ(), b.getZ()) >> 4;
+        var level = helper.getLevel().dimension();
+        List<ScanReport.Thing> grass = r.things.stream().filter(t -> t.kind() == Kind.RANDOM_TICK && t.level().equals(level)
+                && t.type().equals("minecraft:grass_block")
+                && (t.blockPos().getX() >> 4) >= minX && (t.blockPos().getX() >> 4) <= maxX
+                && (t.blockPos().getZ() >> 4) >= minZ && (t.blockPos().getZ() >> 4) <= maxZ).toList();
+        long calls = grass.stream().mapToLong(ScanReport.Thing::calls).sum();
+        // 256 grass blocks in a section of 4096 at 200 picks a tick: about 12 random ticks a tick, 250 in the scan.
+        helper.assertTrue(!grass.isEmpty() && calls >= 100,
+                "the grass's random ticks are measured in the plot's chunks (" + calls + " calls in " + grass.size() + " chunks)");
+        helper.assertTrue(grass.stream().allMatch(t -> t.totalNs() > 0), "the grass's random ticks took time");
+        helper.assertTrue(r.types.stream().anyMatch(g -> g.name().equals("minecraft:grass_block") && g.kind() == Kind.RANDOM_TICK),
+                "the grass's random ticks are a type of their own");
+        helper.assertTrue(r.mods.stream().anyMatch(g -> g.name().equals("minecraft") && g.totalNs() >= grass.stream().mapToLong(ScanReport.Thing::totalNs).sum()),
+                "the grass's random ticks count to its mod, minecraft");
+        helper.assertTrue(r.things.stream().anyMatch(t -> t.kind() == Kind.CHUNK && t.level().equals(level)
+                        && (t.blockPos().getX() >> 4) >= minX && (t.blockPos().getX() >> 4) <= maxX
+                        && (t.blockPos().getZ() >> 4) >= minZ && (t.blockPos().getZ() >> 4) <= maxZ),
+                "the plot's chunks have their upkeep measured apart");
+        helper.assertTrue(r.measuredNs() + r.phasesNs() <= r.tickNsTotal, "the things and parts fit in the ticks");
+        helper.succeed();
     }
 
     /** Runs {@code then} once no scan is running (another test's may be). */

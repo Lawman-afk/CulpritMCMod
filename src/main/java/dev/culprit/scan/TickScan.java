@@ -16,8 +16,10 @@ public final class TickScan {
     private static @Nullable TickScan pending;
     private static @Nullable TickScan running;
     private static @Nullable ScanReport last;
+    /** Between a tick's start and its end (where a stop waits for the end). */
+    private static boolean inTick;
 
-    private final int ticksWanted;
+    private int ticksWanted;
     private final @Nullable Consumer<ScanReport> onDone;
     private CostTable table;
     private int ticksDone;
@@ -52,7 +54,10 @@ public final class TickScan {
         return scan == null ? -1 : scan.ticksWanted - scan.ticksDone;
     }
 
-    /** Ends the running scan now; its report is made from the ticks it has (false if none was running). */
+    /**
+     * Ends the running scan; its report is made from the ticks it has (false if none was running). Asked inside a tick,
+     * with a report, it ends as that tick does, so the tick and what was measured in it count together.
+     */
     public static boolean stopNow(boolean report) {
         if (pending != null) {
             pending = null;
@@ -61,6 +66,10 @@ public final class TickScan {
         TickScan scan = running;
         if (scan == null) {
             return false;
+        }
+        if (report && inTick) {
+            scan.ticksWanted = Math.min(scan.ticksWanted, scan.ticksDone + 1);
+            return true;
         }
         scan.finish(report && scan.ticksDone > 0);
         return true;
@@ -71,6 +80,7 @@ public final class TickScan {
     }
 
     private static void onTickPre(ServerTickEvent.Pre event) {
+        inTick = true;
         if (pending != null && running == null) {
             running = pending;
             pending = null;
@@ -83,6 +93,7 @@ public final class TickScan {
     }
 
     private static void onTickPost(ServerTickEvent.Post event) {
+        inTick = false;
         TickScan scan = running;
         if (scan == null) {
             return;
@@ -101,6 +112,7 @@ public final class TickScan {
         Probe.table = table;
         Probe.thread = Thread.currentThread();
         Probe.overheadNs = timerCost();
+        Probe.perCallNs = Probe.calibrate();
         startedAtMillis = System.currentTimeMillis();
         Probe.active = true;
     }
@@ -110,7 +122,7 @@ public final class TickScan {
         Probe.table = null;
         running = null;
         if (report) {
-            ScanReport r = ScanReport.of(table, ticksDone, tickNsTotal, tickNsMax, startedAtMillis);
+            ScanReport r = ScanReport.of(table, ticksDone, tickNsTotal, tickNsMax, startedAtMillis, table.calls() * Probe.perCallNs);
             last = r;
             if (onDone != null) {
                 onDone.accept(r);

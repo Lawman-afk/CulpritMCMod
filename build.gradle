@@ -45,8 +45,9 @@ tasks.named('jar', Jar) {
     from('LICENSE') {
         rename { licenceName }
     }
-    // The dev aids (the prepared test world, photographers) are for the dev runs only, never in a released jar.
-    exclude('dev/culprit/devworld/**')
+    // The dev aids (the prepared test world, photographers) and the developer's tests (GameTests and their
+    // structures) are for the dev runs only, never in a released jar.
+    exclude('dev/culprit/devworld/**', 'dev/culprit/gametest/**', 'data/culprit/structure/gametest/**')
 }
 
 // Mojang ships Java 25 to players in 26.3, so the mod targets Java 25.

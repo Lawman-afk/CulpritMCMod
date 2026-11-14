@@ -2,19 +2,26 @@ package dev.culprit.client;
 
 import org.jspecify.annotations.Nullable;
 
+import dev.culprit.command.ReportText;
 import dev.culprit.net.CulpritNetwork;
 import dev.culprit.net.ReportData;
+import dev.culprit.scan.Kind;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 
-/** What this client knows of the server's scans: the last report it was sent, and how the scan it asked for stands. */
+/**
+ * What this client knows of the server's scans: the last report it was sent, how the scan it asked for stands, and
+ * whether it may scan. It tells the player in chat when a scan starts and when it ends, with the quick results.
+ */
 public final class ClientReport {
     private static @Nullable ReportData data;
     private static long receivedMillis;
     private static byte state = -1;
     private static int stateTicks;
     private static long stateMillis;
+    private static int scanSeconds;
 
     private ClientReport() {}
 
@@ -31,23 +38,106 @@ public final class ClientReport {
         return state;
     }
 
+    /** How long the running scan was asked to last, in seconds. */
+    public static int scanSeconds() {
+        return scanSeconds;
+    }
+
     static void receive(ReportData report) {
         data = report;
         receivedMillis = System.currentTimeMillis();
-        state = -1;
-        Overlay.newReport(report);
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null && !(mc.gui.screen() instanceof CulpritScreen)) {
-            mc.player.sendSystemMessage(Component.translatableWithFallback("culprit.client.ready",
-                    "Culprit: the scan's results are shown on the world. Press %s for the list.", CulpritKeys.OPEN.getTranslatedKeyMessage())
-                    .withStyle(ChatFormatting.GOLD));
+        Names.clear();
+        if (state == CulpritNetwork.Status.STARTED || state == CulpritNetwork.Status.BUSY) {
+            state = -1;
         }
+        Overlay.newReport(report);
+        say(finished(report));
     }
 
     static void status(byte s, int ticks) {
-        state = s;
-        stateTicks = ticks;
-        stateMillis = System.currentTimeMillis();
+        if (s == CulpritNetwork.Status.STARTED || s == CulpritNetwork.Status.BUSY || s == CulpritNetwork.Status.RUNNING) {
+            stateTicks = ticks;
+            stateMillis = System.currentTimeMillis();
+        }
+        if (s == CulpritNetwork.Status.RUNNING) {
+            scanSeconds = Math.max(scanSeconds, (ticks + 19) / 20);
+            state = CulpritNetwork.Status.BUSY;        // a scan runs (someone's); no chat for an answer to a question
+            return;
+        }
+        switch (s) {
+            case CulpritNetwork.Status.STARTED -> {
+                scanSeconds = (ticks + 19) / 20;
+                say(tag().append(Component.translatableWithFallback("culprit.chat.started",
+                        "scanning the server for %s seconds. The results come when it ends (%s).", scanSeconds,
+                        CulpritKeys.RESULTS.getTranslatedKeyMessage()).withStyle(ChatFormatting.GRAY)));
+            }
+            case CulpritNetwork.Status.BUSY -> {
+                scanSeconds = Math.max(scanSeconds, (ticks + 19) / 20);
+                say(tag().append(Component.translatableWithFallback("culprit.chat.busy", "a scan is already running (%s s left).",
+                        (ticks + 19) / 20).withStyle(ChatFormatting.GRAY)));
+            }
+            case CulpritNetwork.Status.DENIED -> {
+                if (Minecraft.getInstance().gui.screen() == null) {
+                    say(tag().append(Component.translatableWithFallback("culprit.chat.denied", "only operators can scan this server.")
+                            .withStyle(ChatFormatting.RED)));
+                }
+            }
+            case CulpritNetwork.Status.STOPPED -> say(tag().append(Component.translatableWithFallback("culprit.chat.stopped",
+                    "scan stopped; the results so far are coming.").withStyle(ChatFormatting.GRAY)));
+            default -> {}
+        }
+        // The answer to "may I scan?" is kept as it is, without overwriting a scan's running state.
+        if (s != CulpritNetwork.Status.ALLOWED || state == -1 || state == CulpritNetwork.Status.DENIED) {
+            state = s;
+        }
+    }
+
+    /** "[Culprit] done: the tick took ..., costliest: ... Press F9 for everything." */
+    private static Component finished(ReportData d) {
+        MutableComponent line = tag().append(Component.translatableWithFallback("culprit.chat.done",
+                "done. The server tick took %s on average and %s at worst (it has 50 ms).",
+                Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal)))),
+                ReportText.time(d.tickNsMax)).withStyle(ChatFormatting.WHITE));
+        if (d.types > 0) {
+            MutableComponent top = Component.empty();
+            for (int i = 0; i < Math.min(3, d.types); i++) {
+                if (i > 0) {
+                    top.append(Component.literal(", ").withStyle(ChatFormatting.GRAY));
+                }
+                long perTick = d.perTick(d.typeTotal[i]);
+                top.append(Component.literal(typeName(d, i) + " ")).append(Component.literal(ReportText.time(perTick)).withColor(Heat.rgb(Heat.of(perTick))));
+            }
+            line.append(" ").append(Component.translatableWithFallback("culprit.chat.costliest", "Costliest: %s.", top).withStyle(ChatFormatting.WHITE));
+        }
+        line.append(" ").append(Component.translatableWithFallback("culprit.chat.more", "Press %s for everything; it is marked on the world too.",
+                CulpritKeys.RESULTS.getTranslatedKeyMessage()).withStyle(ChatFormatting.GRAY));
+        return line;
+    }
+
+    /** "Villager x24", "Hopper x70", "Piston (block events) x8", "Grass Block random ticks (40 chunks)". */
+    private static String typeName(ReportData d, int i) {
+        int kind = d.typeKind[i];
+        String name = Names.of(d.names[d.typeName[i]], kind);
+        if (Kind.isChunkWide(kind)) {
+            String what = kind == Kind.RANDOM_TICK
+                    ? name + " " + Component.translatableWithFallback("culprit.kind.random_tick", "random ticks").getString() : name;
+            return Component.translatableWithFallback("culprit.chat.in_chunks", "%s (%s chunks)", what, d.typeCount[i]).getString();
+        }
+        String what = kind == Kind.BLOCK_ENTITY || kind == Kind.ENTITY ? name
+                : name + " (" + Component.translatableWithFallback("culprit.kind.one." + Kind.key(kind), Kind.englishOne(kind)).getString() + ")";
+        return d.typeCount[i] > 1 ? what + " x" + d.typeCount[i] : what;
+    }
+
+    /** "[Culprit] " in gold, as the first part of a line whose other parts keep their own colours. */
+    private static MutableComponent tag() {
+        return Component.empty().append(Component.literal("[Culprit] ").withStyle(ChatFormatting.GOLD));
+    }
+
+    private static void say(Component message) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null) {
+            mc.player.sendSystemMessage(message);
+        }
     }
 
     /** Seconds left in the scan this client started, or -1 if none is known to run. */

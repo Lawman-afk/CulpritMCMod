@@ -41,6 +41,10 @@ public final class CulpritNetwork {
         public static final byte BUSY = 2;
         public static final byte STOPPED = 3;
         public static final byte NOT_RUNNING = 4;
+        /** The answer to "may I scan?": yes (ticks: the longest scan allowed, in seconds). */
+        public static final byte ALLOWED = 5;
+        /** The answer to "may I scan?" while a scan runs: yes, and this many ticks are left of it. */
+        public static final byte RUNNING = 6;
         public static final Type<Status> TYPE = new Type<>(Culprit.id("status"));
         public static final StreamCodec<FriendlyByteBuf, Status> CODEC = StreamCodec.of(
                 (FriendlyByteBuf buf, Status p) -> {
@@ -54,7 +58,7 @@ public final class CulpritNetwork {
         }
     }
 
-    /** Client to server: scan for {@code seconds} (5 to 120), or stop the running scan (0). */
+    /** Client to server: scan for {@code seconds} (5 to the server's longest), stop the running scan (0), or ask whether this player may (-1). */
     public record ScanRequest(int seconds) implements CustomPacketPayload {
         public static final Type<ScanRequest> TYPE = new Type<>(Culprit.id("scan_request"));
         public static final StreamCodec<FriendlyByteBuf, ScanRequest> CODEC = StreamCodec.of(
@@ -90,6 +94,11 @@ public final class CulpritNetwork {
         }
         if (!mayScan(player)) {
             status(player, Status.DENIED, 0);
+            return;
+        }
+        if (request.seconds() < 0) {
+            int running = TickScan.ticksLeft();
+            status(player, running >= 0 ? Status.RUNNING : Status.ALLOWED, running >= 0 ? running : dev.culprit.config.CulpritServerConfig.maxSeconds());
             return;
         }
         if (request.seconds() <= 0) {

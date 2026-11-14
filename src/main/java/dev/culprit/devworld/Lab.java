@@ -12,12 +12,13 @@ import dev.culprit.Culprit;
 import dev.culprit.client.ClientReport;
 import dev.culprit.client.CulpritScreen;
 import dev.culprit.client.Overlay;
+import dev.culprit.client.ScanScreen;
 import dev.culprit.net.CulpritNetwork;
 import dev.culprit.net.ReportData;
 import dev.culprit.scan.Kind;
-import dev.culprit.scan.TickScan;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -58,25 +59,29 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /**
  * Development aid, left out of the released jar (build.gradle's jar task; found by its annotation, so nothing in the
  * jar names it): the world the user tests in (DESIGN §7). With {@code -Dculprit.lab=true} (the {@code lab} Gradle
  * run) the client makes a flat creative world, "Culprit Lab" (run/saves/culprit_lab), builds lag sources of each kind
- * round the spawn with a sign at each saying what it is, scans the server for ten seconds, photographs the results on
- * the world and in the Culprit screen (run/screenshots/lab_*.png), and quits, the world saved to copy into the test
- * instance's saves. Daylight, no weather, no mob spawning.
+ * round the spawn with a sign at each saying what it is, scans the server for ten seconds as a player would from the
+ * scan menu, photographs the results on the world, in the results screen's tabs, the scan menu (ready, and with a
+ * scan running) and the chat (run/screenshots/lab_*.png), and quits, the world saved to copy into the test instance's
+ * saves. Daylight, no weather, no mob spawning.
  */
 @EventBusSubscriber(value = Dist.CLIENT, modid = Culprit.MODID)
 public final class Lab {
     private static final boolean ENABLED = Boolean.getBoolean("culprit.lab");
     /** Ticks for the world to come in and the machines to get going before the scan, and between pictures. */
     private static final int SETTLE = 200, EACH = 40, SCAN_TICKS = 200;
+    /** What a view shows besides the world, when not a results tab (0 and up): nothing, the scan menu, the menu with a scan just started from it, the chat. */
+    private static final int NO_SCREEN = -1, SCAN_MENU = -2, SCAN_RUNNING = -3, CHAT = -4;
 
     /** A picture: its name, where it is taken from and which way it looks, and what is on screen. */
     private record View(String name, Vec3 at, float yaw, float pitch, int screenTab, boolean mark) {}
 
-    private static boolean worldMade, built, scanned;
+    private static boolean worldMade, built, scanned, hudWanted;
     private static int waited, shot;
     private static List<View> views = List.of();
     private static Vec3 spawn = Vec3.ZERO;
@@ -123,10 +128,8 @@ public final class Lab {
         if (!scanned) {
             if (waited == SETTLE) {
                 scanned = true;
-                server.execute(() -> {
-                    ServerPlayer player = server.getPlayerList().getPlayers().getFirst();
-                    TickScan.start(SCAN_TICKS, report -> CulpritNetwork.sendReport(player, report));
-                });
+                // As a player starts one from the scan menu (F8): the request, then the chat as it starts and ends.
+                ClientPacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(SCAN_TICKS / 20));
                 Culprit.LOGGER.info("Lab: scanning for {} ticks", SCAN_TICKS);
             }
             return;
@@ -135,8 +138,8 @@ public final class Lab {
         if (report == null) {
             return;
         }
-        if (!mc.gui.hud.isHidden()) {
-            mc.gui.hud.toggle();                                   // no hand, hotbar or chat in the pictures
+        if (mc.gui.hud.isHidden() == hudWanted) {
+            mc.gui.hud.toggle();                                   // no hand, hotbar or chat in the pictures, but the chat's
         }
         // Each view: the camera and what is on screen, a wait for the frame to settle, the picture.
         int t = ++shot;
@@ -154,12 +157,20 @@ public final class Lab {
             if (v.mark()) {
                 Overlay.markThing(farthestCostly(report, mc));
             }
+            hudWanted = v.screenTab() == CHAT;
             if (v.screenTab() >= 0) {
                 CulpritScreen.showTab(v.screenTab());
                 if (!(mc.gui.screen() instanceof CulpritScreen)) {
                     mc.gui.setScreen(new CulpritScreen());
                 }
-            } else if (mc.gui.screen() instanceof CulpritScreen) {
+            } else if (v.screenTab() == SCAN_MENU) {
+                mc.gui.setScreen(new ScanScreen());
+            } else if (v.screenTab() == SCAN_RUNNING) {
+                ClientPacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(30));     // as the menu's 30 s button does
+                mc.gui.setScreen(new ScanScreen());
+            } else if (v.screenTab() == CHAT) {
+                mc.gui.setScreen(new ChatScreen("", false));
+            } else if (mc.gui.screen() != null) {
                 mc.gui.setScreen(null);
             }
             server.execute(() -> server.getPlayerList().getPlayers().getFirst()
@@ -181,7 +192,7 @@ public final class Lab {
     /** The costliest thing at least 12 blocks from the spawn, to mark for the picture of a marked thing. */
     private static int farthestCostly(ReportData r, Minecraft mc) {
         for (int i = 0; i < r.things; i++) {
-            if (r.kind[i] != Kind.CHUNK && BlockPos.of(r.pos[i]).distToCenterSqr(spawn) > 12 * 12) {
+            if (!Kind.isChunkWide(r.kind[i]) && BlockPos.of(r.pos[i]).distToCenterSqr(spawn) > 12 * 12) {
                 return i;
             }
         }
@@ -285,7 +296,7 @@ public final class Lab {
         sign(level, new BlockPos(-4, y, 1), List.of("Observer clock", "and pistons:", "block ticks and", "block events"));
 
         // The spawn, with what to do.
-        sign(level, new BlockPos(0, y, 3), List.of("Culprit Lab", "Press F7: the", "Culprit screen.", "Scan 10 s, then look"));
+        sign(level, new BlockPos(0, y, 3), List.of("Culprit Lab", "F8: scan menu", "F9: results", "(rebindable)"));
         sign(level, new BlockPos(2, y, 3), List.of("Or type", "/culprit scan", "then /culprit", "top things"));
         commands.performPrefixedCommand(source, "setworldspawn 1 " + y + " 2");
         spawn = new Vec3(1.5, y, 2.5);
@@ -296,16 +307,20 @@ public final class Lab {
         player.teleportTo(level, spawn.x, spawn.y, spawn.z, Set.of(), 180f, 10f, true);
 
         List<View> list = new ArrayList<>();
-        list.add(eye("overview", 0.5, y + 16.0, -24.0, 0f, 32f, -1, false));
-        list.add(eye("hoppers", -8.5, y + 3.2, 2.0, 0f, 8f, -1, false));
-        list.add(eye("villagers", 8.5, y + 4.6, 1.5, 0f, 30f, -1, false));
-        list.add(eye("cows_items", -1.0, y + 7.0, -2.0, 180f, 40f, -1, false));
-        list.add(eye("pistons", -3.5, y + 2.6, -5.5, 0f, 18f, -1, false));
-        list.add(eye("marked", -14.0, y + 3.0, -2.0, -135f, 12f, -1, true));
-        list.add(eye("screen_things", 1.5, y + 1.6, 2.5, 180f, 10f, 0, false));
-        list.add(eye("screen_types", 1.5, y + 1.6, 2.5, 180f, 10f, 1, false));
-        list.add(eye("screen_mods", 1.5, y + 1.6, 2.5, 180f, 10f, 2, false));
-        list.add(eye("screen_chunks", 1.5, y + 1.6, 2.5, 180f, 10f, 3, false));
+        list.add(eye("overview", 0.5, y + 16.0, -24.0, 0f, 32f, NO_SCREEN, false));
+        list.add(eye("hoppers", -8.5, y + 3.2, 2.0, 0f, 8f, NO_SCREEN, false));
+        list.add(eye("villagers", 8.5, y + 4.6, 1.5, 0f, 30f, NO_SCREEN, false));
+        list.add(eye("cows_items", -1.0, y + 7.0, -2.0, 180f, 40f, NO_SCREEN, false));
+        list.add(eye("pistons", -3.5, y + 2.6, -5.5, 0f, 18f, NO_SCREEN, false));
+        list.add(eye("marked", -14.0, y + 3.0, -2.0, -135f, 12f, NO_SCREEN, true));
+        list.add(eye("screen_tick", 1.5, y + 1.6, 2.5, 180f, 10f, 0, false));
+        list.add(eye("screen_things", 1.5, y + 1.6, 2.5, 180f, 10f, 1, false));
+        list.add(eye("screen_types", 1.5, y + 1.6, 2.5, 180f, 10f, 2, false));
+        list.add(eye("screen_mods", 1.5, y + 1.6, 2.5, 180f, 10f, 3, false));
+        list.add(eye("screen_chunks", 1.5, y + 1.6, 2.5, 180f, 10f, 4, false));
+        list.add(eye("scan_menu", 1.5, y + 1.6, 2.5, 180f, 10f, SCAN_MENU, false));
+        list.add(eye("scan_running", 1.5, y + 1.6, 2.5, 180f, 10f, SCAN_RUNNING, false));
+        list.add(eye("chat", 1.5, y + 1.6, 2.5, 180f, 10f, CHAT, false));
         views = list;
         Culprit.LOGGER.info("Lab: lag sources set out round the spawn at y {}", y);
     }
