@@ -16,17 +16,20 @@ public final class Kind {
     public static final byte RANDOM_TICK = 6;
     /** A chunk's mob spawning. */
     public static final byte SPAWNING = 7;
-    public static final int COUNT = 8;
+    /** A chunk's particles of one kind, moved and made ready to draw (frame scans). */
+    public static final byte PARTICLE = 8;
+    public static final int COUNT = 9;
 
-    private static final String[] KEYS = {"block_entity", "entity", "block_tick", "fluid_tick", "block_event", "chunk", "random_tick", "spawning"};
+    private static final String[] KEYS = {"block_entity", "entity", "block_tick", "fluid_tick", "block_event", "chunk", "random_tick", "spawning", "particle"};
     private static final String[] ENGLISH = {"block entities", "entities", "block ticks", "fluid ticks", "block events", "chunk upkeep",
-            "random ticks", "mob spawning"};
+            "random ticks", "mob spawning", "particles"};
     private static final String[] ENGLISH_ONE = {"block entity", "entity", "block ticks", "fluid ticks", "block events", "chunk upkeep",
-            "random ticks", "mob spawning"};
+            "random ticks", "mob spawning", "particles"};
     /** What each kind is, in a few words. */
     private static final String[] ABOUT = {"hoppers, furnaces, machines", "mobs, items, players, vehicles",
             "repeaters, observers, crops on a timer", "water and lava spreading", "pistons, note blocks, chests opening",
-            "picking blocks to tick, snow and ice", "crops, grass, leaves, by chance", "new mobs appearing"};
+            "picking blocks to tick, snow and ice", "crops, grass, leaves, by chance", "new mobs appearing",
+            "smoke, flames, dust: moved and made ready"};
 
     private Kind() {}
 
@@ -52,7 +55,7 @@ public final class Kind {
 
     /** Whether things of this kind are a whole chunk's (charged to the chunk, with no one block to point at). */
     public static boolean isChunkWide(int kind) {
-        return kind == CHUNK || kind == RANDOM_TICK || kind == SPAWNING;
+        return kind == CHUNK || kind == RANDOM_TICK || kind == SPAWNING || kind == PARTICLE;
     }
 
     /** Whether things of this kind belong to the game rather than to a block or entity's mod. */

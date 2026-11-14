@@ -94,6 +94,7 @@ public final class FrameScan {
         long frameNs = now - scan.frameStartNs;
         scan.frameNsTotal += frameNs;
         scan.frameNsMax = Math.max(scan.frameNsMax, frameNs);
+        FrameProbe.shareOut();
         scan.table.endTick(frameNs);
         scan.frames++;
         if (scan.stopAsked || now - scan.startNs >= scan.seconds * 1_000_000_000L) {

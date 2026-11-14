@@ -3,7 +3,9 @@ package dev.culprit.scan;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -29,6 +31,9 @@ public final class FrameProbe {
     private static int depth;
     /** This frame's render states, to the entity or block entity each was made from. */
     private static final Map<Object, Object> STATES = new IdentityHashMap<>();
+    /** Parts handed in to be drawn, counted while a frame scan runs (mixin/SubmitNodeFrameMixin); and the count at this frame's start. */
+    public static long parts;
+    private static long frameParts;
 
     private FrameProbe() {}
 
@@ -61,10 +66,16 @@ public final class FrameProbe {
     static void frameStarts() {
         depth = 0;
         STATES.clear();
+        frameParts = parts;
     }
 
-    /** Time making or drawing an entity, charged to it. */
-    public static void entity(Entity entity, long ns) {
+    /** At a frame's end: the sorting and the drawing of the handed-in parts shared out to the things, by what each handed in. */
+    static void shareOut() {
+        table.shareByParts(FramePhase.BATCHING, FramePhase.FEATURES, parts - frameParts);
+    }
+
+    /** Time making or drawing an entity, charged to it; its slot, or -1. */
+    public static int entity(Entity entity, long ns) {
         CostTable t = table;
         int slot = t.slotOf(entity);
         if (slot < 0) {
@@ -74,19 +85,39 @@ public final class FrameProbe {
         if (slot >= 0) {
             t.add(slot, ns);
         }
+        return slot;
     }
 
-    /** Time making or drawing a block entity, charged to it. */
-    public static void blockEntity(BlockEntity blockEntity, long ns) {
+    /** Time making or drawing a block entity, charged to it; its slot, or -1. */
+    public static int blockEntity(BlockEntity blockEntity, long ns) {
         CostTable t = table;
         int slot = t.slotOf(blockEntity);
         if (slot < 0) {
             Level level = blockEntity.getLevel();
             if (level == null) {
-                return;
+                return -1;
             }
             String type = String.valueOf(BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(blockEntity.getType()));
-            slot = t.newSlot(Kind.BLOCK_ENTITY, t.levelIndex(level), blockEntity.getBlockPos().asLong(), 0L, t.typeId(type), blockEntity);
+            // A place's block entities are one thing, as in a tick scan (a piston's moving block is new at every push).
+            slot = t.blockEntitySlot(t.levelIndex(level), blockEntity, blockEntity.getBlockPos().asLong(), t.typeId(type));
+        }
+        if (slot >= 0) {
+            t.add(slot, ns);
+        }
+        return slot;
+    }
+
+    /** Time moving or making ready a particle, charged to its kind in its chunk. */
+    public static void particle(Level level, ParticleInfo particle, long ns) {
+        CostTable t = table;
+        Object type = particle.culprit$type();
+        int typeId = t.typeIdOf(type != null ? type : particle.getClass());
+        int li = t.levelIndex(level);
+        int cx = Mth.floor(particle.culprit$x()) >> 4, cz = Mth.floor(particle.culprit$z()) >> 4;
+        long key = (((long) cx & 0x1FFFFFL) << 43) | (((long) cz & 0x1FFFFFL) << 22) | (typeId & 0x3FFFFFL);
+        int slot = t.slotAt(li, Kind.PARTICLE, key);
+        if (slot < 0) {
+            slot = t.newSlot(Kind.PARTICLE, li, BlockPos.asLong((cx << 4) + 8, level.getSeaLevel(), (cz << 4) + 8), key, typeId, null);
         }
         if (slot >= 0) {
             t.add(slot, ns);
@@ -100,15 +131,23 @@ public final class FrameProbe {
         }
     }
 
-    /** Time drawing a render state, charged to the thing it was made from (if it was made this frame). */
-    public static void drawn(Object state, long ns) {
+    /**
+     * Time handing in a render state's parts to be drawn, and how many, charged to the thing it was made from (if it was
+     * made this frame): its parts are its share of the sorting and drawing, at the frame's end.
+     */
+    public static void drawn(Object state, long ns, long handedIn) {
         Object thing = STATES.get(state);
+        int slot;
         if (thing instanceof Entity entity) {
-            entity(entity, ns);
+            slot = entity(entity, ns);
         } else if (thing instanceof BlockEntity blockEntity) {
-            blockEntity(blockEntity, ns);
+            slot = blockEntity(blockEntity, ns);
         } else {
             phase(FramePhase.SUBMIT, ns);
+            return;
+        }
+        if (slot >= 0 && handedIn > 0) {
+            table.addParts(slot, handedIn);
         }
     }
 

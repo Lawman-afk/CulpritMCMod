@@ -54,10 +54,11 @@ abstract class LevelRendererFrameMixin {
             return;
         }
         long start = FrameProbe.begin();
+        long before = FrameProbe.parts;
         try {
             original.call(dispatcher, state, camera, x, y, z, pose, collector);
         } finally {
-            FrameProbe.drawn(state, FrameProbe.end(start));
+            FrameProbe.drawn(state, FrameProbe.end(start), FrameProbe.parts - before);
         }
     }
 
@@ -70,10 +71,11 @@ abstract class LevelRendererFrameMixin {
             return;
         }
         long start = FrameProbe.begin();
+        long before = FrameProbe.parts;
         try {
             original.call(dispatcher, state, pose, collector, camera);
         } finally {
-            FrameProbe.drawn(state, FrameProbe.end(start));
+            FrameProbe.drawn(state, FrameProbe.end(start), FrameProbe.parts - before);
         }
     }
 

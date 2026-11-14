@@ -83,8 +83,9 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
   the HUD and screens, mods' frame events, showing the frame, the frame-rate limit's wait), Culprit's own timing and
   what is left, adding up to the frame. The results' Server ticks / Frames switch shows it in the same lists (Frame,
   Things, Types, Mods, Chunks) and on the world; the stutters (frames over twice the usual one and at least 20 ms)
-  beside the averages, as the lag spikes are for ticks. Not yet: particles by kind, the batched drawing shared out by
-  thing (§5.3), Iris's shadow pass.
+  beside the averages, as the lag spikes are for ticks. Particles by kind and chunk (each particle's move and making
+  ready; its type kept from when it was made). The sorting and the drawing of the handed-in parts shared out to the
+  entities and block entities by the parts each handed in (§5.3). Not yet: Iris's shadow pass.
 
 ### 4.3 Chunk inspector
 
@@ -167,6 +168,12 @@ The prototype measures both and tries tagging each submission with the thing tha
 shared out by what each thing submitted. If tagging costs too much, the drawing is shown per kind of part, beside each
 thing's own time and the count of parts it submitted.
 
+Built (2026-11-14): every part handed in is counted (`SubmitNodeCollection`'s submit methods), each thing's own count
+taken round its submission; the drawing of the handed-in parts is timed apart from the terrain's (`PreparedFrame`'s
+execute methods); at each frame's end the sorting and that drawing are shared out to the things by their share of all
+the parts handed in, and moved from the frame's parts to them. In the Lab, 160 dropped items went from 154 to 489 µs a
+frame, and the sorting part from 0.70 to 0.06 ms.
+
 ### 5.4 Network
 
 Results go to the client in pages under the payload limit. The payloads are optional, so the mod on one side alone is
@@ -220,3 +227,4 @@ cost nothing); ModernFix.
 | 2026-11-14 | The user: "I think the lag spikes are important to use, but how do we implement it without sacrificing the average results as well? Maybe a toggle in the menu to switch between the 2." One scan gives both: each tick's costs are folded into the averages as before, and the slowest ticks are also kept whole (a pool of the slowest 5 %); at the end, those over twice the median tick and at least 5 ms are the spikes, a second report sent beside the first. A switch beside the tabs picks which one the lists, bar and world show. Twice the median rather than a fixed 50 ms: a server rarely goes over 50 ms in a short scan, but the ticks well over its usual one are what players feel as stutter; the 5 ms floor keeps an idle server's noise out. Also, at the user's word: no chunk under the crosshair (things only), and a thing that is gone (an item picked up) is no longer boxed as a whole block at its old place. |
 | 2026-11-14 | The frame scan built on 26.3 ("continue with your plans"): the same tables and reports as the tick scan (a frame for a tick), so frames have types, mods, chunks, the world view and stutters at no extra cost; a thing's cost is what it takes on the render thread to be made ready and handed in, the drawing itself a part of the frame, not yet shared out by thing. A frame scan needs nothing from the server and runs beside a tick scan (each its own nesting, the server thread's and the render thread's). |
 | 2026-11-14 | The frame hooks are optional (`require = 0`): a hook that cannot find its place (another mod changed the frame loop, a later version) leaves that part unmeasured instead of stopping the game, which the tick hooks still do since the tick scan is useless without them. The Lab names any frame part never timed. |
+| 2026-11-14 | Particles by kind (a new kind, chunk-wide like random ticks: per kind and chunk, not per particle) and the drawing shared out by parts handed in: the two gaps the first frame scan left, done before the chunk inspector. A particle's type is kept in a field set when the engine makes it (a mixin), its cost charged by kind; one added another way is named by its class. |

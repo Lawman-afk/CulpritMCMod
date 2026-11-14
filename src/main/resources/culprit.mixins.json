@@ -15,7 +15,13 @@
     "MinecraftFrameMixin",
     "GameRendererFrameMixin",
     "LevelExtractorFrameMixin",
-    "LevelRendererFrameMixin"
+    "LevelRendererFrameMixin",
+    "ParticleMixin",
+    "ParticleEngineMixin",
+    "ParticleFrameMixin",
+    "QuadParticleFrameMixin",
+    "SubmitNodeFrameMixin",
+    "PreparedFrameMixin"
   ],
   "injectors": {
     "defaultRequire": 1

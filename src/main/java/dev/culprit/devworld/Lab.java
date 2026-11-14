@@ -346,6 +346,13 @@ public final class Lab {
         }
         sign(level, new BlockPos(18, y, 2), List.of("Command blocks:", "a big /fill every", "3 seconds:", "lag spikes"));
 
+        // Particles: twelve signal campfires on hay bales, their smoke rising in tall columns (a frame scan's particles).
+        for (int x = 6; x <= 17; x++) {
+            level.setBlock(new BlockPos(x, y, 18), Blocks.HAY_BLOCK.defaultBlockState(), 3);
+            level.setBlock(new BlockPos(x, y + 1, 18), Blocks.CAMPFIRE.defaultBlockState().setValue(net.minecraft.world.level.block.CampfireBlock.SIGNAL_FIRE, true), 3);
+        }
+        sign(level, new BlockPos(11, y, 16), List.of("Campfires:", "signal smoke", "(particles, for", "a frame scan)"));
+
         // The spawn, with what to do.
         sign(level, new BlockPos(0, y, 3), List.of("Culprit Lab", "F8: scan menu", "F9: results", "(rebindable)"));
         sign(level, new BlockPos(2, y, 3), List.of("Or type", "/culprit scan", "then /culprit", "top things"));

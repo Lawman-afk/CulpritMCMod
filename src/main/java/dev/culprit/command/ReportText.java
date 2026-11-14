@@ -85,6 +85,9 @@ public final class ReportText {
     private static Component kindList(ScanReport r) {
         MutableComponent list = Component.empty();
         for (int k = 0; k < Kind.COUNT; k++) {
+            if (k == Kind.PARTICLE) {
+                continue;                                   // (a frame's, not a tick's)
+            }
             if (k > 0) {
                 list.append(", ");
             }

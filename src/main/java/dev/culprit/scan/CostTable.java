@@ -36,6 +36,8 @@ final class CostTable {
     long[] tickNs = new long[1024];
     long[] maxNs = new long[1024];
     long[] calls = new long[1024];
+    /** This frame's parts handed in to be drawn, per slot (frame scans: the drawing shared out by them). */
+    long[] tickParts = new long[1024];
     private int[] lastTick = new int[1024];
     int size;
     boolean full;
@@ -100,16 +102,68 @@ final class CostTable {
     }
 
     /** The type number of a block or fluid, by its registry name the first time. */
-    int typeIdOf(Object blockOrFluid) {
-        int id = typeOfObject.getInt(blockOrFluid);
+    int typeIdOf(Object thing) {
+        int id = typeOfObject.getInt(thing);
         if (id < 0) {
-            String name = blockOrFluid instanceof net.minecraft.world.level.block.Block block
-                    ? net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString()
-                    : net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey((net.minecraft.world.level.material.Fluid) blockOrFluid).toString();
+            String name;
+            if (thing instanceof net.minecraft.world.level.block.Block block) {
+                name = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString();
+            } else if (thing instanceof net.minecraft.world.level.material.Fluid fluid) {
+                name = net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey(fluid).toString();
+            } else if (thing instanceof net.minecraft.core.particles.ParticleType<?> particle) {
+                name = String.valueOf(net.minecraft.core.registries.BuiltInRegistries.PARTICLE_TYPE.getKey(particle));
+            } else if (thing instanceof Class<?> type) {
+                name = classTypeName(type);
+            } else {
+                name = String.valueOf(thing);
+            }
             id = typeId(name);
-            typeOfObject.put(blockOrFluid, id);
+            typeOfObject.put(thing, id);
         }
         return id;
+    }
+
+    /** A particle added without its type, named by its class: "minecraft:terrain" for TerrainParticle. */
+    private static String classTypeName(Class<?> type) {
+        String simple = type.getSimpleName();
+        if (simple.endsWith("Particle")) {
+            simple = simple.substring(0, simple.length() - 8);
+        }
+        String snake = simple.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase(java.util.Locale.ROOT);
+        String namespace = type.getName().startsWith("net.minecraft.") ? "minecraft" : type.getModule().isNamed() ? type.getModule().getName() : "unknown";
+        return namespace + ":" + (snake.isEmpty() ? "particle" : snake);
+    }
+
+    void addParts(int slot, long parts) {
+        tickParts[slot] += parts;
+    }
+
+    /**
+     * At a frame's end: this frame's time of two phases (the sorting and the drawing of the handed-in parts) shared out to
+     * the things that handed parts in, by their share of every part handed in ({@code allParts}, the things' and the
+     * rest's), moved from the phases to the things so the frame still adds up.
+     */
+    void shareByParts(int phaseA, int phaseB, long allParts) {
+        long pool = phaseTickNs[phaseA] + phaseTickNs[phaseB];
+        int[] slots = touched.elements();
+        long moved = 0;
+        for (int i = 0, n = touched.size(); i < n; i++) {
+            int s = slots[i];
+            long parts = tickParts[s];
+            if (parts > 0) {
+                if (allParts > 0 && pool > 0) {
+                    long share = pool * Math.min(parts, allParts) / allParts;
+                    tickNs[s] += share;
+                    moved += share;
+                }
+                tickParts[s] = 0;
+            }
+        }
+        if (moved > 0) {
+            long fromA = moved * phaseTickNs[phaseA] / pool;
+            phaseTickNs[phaseA] -= fromA;
+            phaseTickNs[phaseB] -= moved - fromA;
+        }
     }
 
     /** Every measured call, things and phases: what Culprit's own timing cost is estimated from. */
@@ -286,6 +340,7 @@ final class CostTable {
         tickNs = Arrays.copyOf(tickNs, n);
         maxNs = Arrays.copyOf(maxNs, n);
         calls = Arrays.copyOf(calls, n);
+        tickParts = Arrays.copyOf(tickParts, n);
         lastTick = Arrays.copyOf(lastTick, n);
     }
 }

@@ -63,6 +63,9 @@ public final class Breakdown {
     private static List<Part> tickParts(ReportData d) {
         List<Part> parts = new ArrayList<>();
         for (int k = 0; k < Kind.COUNT; k++) {
+            if (k == Kind.PARTICLE) {
+                continue;                                   // (a frame's, not a tick's)
+            }
             int group = switch (k) {
                 case Kind.ENTITY -> ENTITIES;
                 case Kind.BLOCK_ENTITY -> BLOCK_ENTITIES;
@@ -83,11 +86,14 @@ public final class Breakdown {
     private static List<Part> frameParts(ReportData d) {
         List<Part> parts = new ArrayList<>();
         parts.add(new Part(Component.translatableWithFallback("culprit.frame.entities", "Entities"),
-                Component.translatableWithFallback("culprit.frame.about.entities", "mobs, items, players: made ready and drawn"),
+                Component.translatableWithFallback("culprit.frame.about.entities2", "made ready, handed in, their share of the drawing"),
                 d.kindNs[Kind.ENTITY], F_ENTITIES));
         parts.add(new Part(Component.translatableWithFallback("culprit.frame.block_entities", "Block entities"),
-                Component.translatableWithFallback("culprit.frame.about.block_entities", "chests, signs, banners: made ready and drawn"),
+                Component.translatableWithFallback("culprit.frame.about.block_entities2", "chests, signs: made ready, handed in, drawn"),
                 d.kindNs[Kind.BLOCK_ENTITY], F_BLOCK_ENTITIES));
+        parts.add(new Part(Component.translatableWithFallback("culprit.frame.particle_kinds", "Particles"),
+                Component.translatableWithFallback("culprit.frame.about.particle_kinds", "each kind, moved and made ready"),
+                d.kindNs[Kind.PARTICLE], F_WORLD));
         for (int p = 0; p < Math.min(FramePhase.COUNT, d.phaseNs.length); p++) {
             int group = switch (p) {
                 case FramePhase.CLIENT_TICK, FramePhase.PACKETS -> F_CLIENT;
