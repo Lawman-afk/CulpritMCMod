@@ -35,6 +35,8 @@ import net.minecraft.world.level.gamerules.GameRules;
 final class ScanTests {
     private static final int SCAN_TICKS = 40;
     private static final int RANDOM_SCAN_TICKS = 20, RANDOM_TICK_SPEED = 200;
+    private static final int SPIKE_SCAN_TICKS = 60, SPIKES = 4;
+    private static final long SPIKE_NS = 25_000_000;
 
     private ScanTests() {}
 
@@ -75,6 +77,25 @@ final class ScanTests {
                     helper.runAfterDelay(1, () -> checkRandomTicks(helper, report));
                 }), "the scan starts");
                 rules.set(GameRules.RANDOM_TICK_SPEED, RANDOM_TICK_SPEED, server);
+            }));
+        });
+
+        // Lag spikes: a row of hoppers, and four ticks of the scan made slow on purpose (busy for 25 ms in the test's own
+        // callback, which runs in the server's own work). They are the spikes, found where they ran; the average keeps
+        // every tick.
+        CulpritGameTests.testAlone("scan_catches_lag_spikes", CulpritGameTests.FLOOR_16, 400, helper -> {
+            for (int x = 0; x < 16; x++) {
+                helper.setBlock(x, 1, 2, Blocks.HOPPER);
+            }
+            helper.runAfterDelay(5, () -> whenNoScan(helper, () -> {
+                helper.assertTrue(TickScan.start(SPIKE_SCAN_TICKS, report -> helper.runAfterDelay(1, () -> checkSpikes(helper, report))),
+                        "the scan starts");
+                for (int k = 1; k <= SPIKES; k++) {
+                    // Each callback its own object: the test keeps them in a map by callback, so one lambda used four
+                    // times would run once.
+                    long ns = SPIKE_NS + k;
+                    helper.runAfterDelay(k * 12, () -> spin(ns));
+                }
             }));
         });
 
@@ -269,6 +290,29 @@ final class ScanTests {
                         && (t.blockPos().getZ() >> 4) >= minZ && (t.blockPos().getZ() >> 4) <= maxZ),
                 "the plot's chunks have their upkeep measured apart");
         helper.assertTrue(r.measuredNs() + r.phasesNs() <= r.tickNsTotal, "the things and parts fit in the ticks");
+        helper.succeed();
+    }
+
+    private static void checkSpikes(GameTestHelper helper, ScanReport r) {
+        helper.assertTrue(r.ticks == SPIKE_SCAN_TICKS, "the average keeps every tick: " + r.ticks);
+        helper.assertTrue(r.medianTickNs > 0 && r.medianTickNs < 20_000_000, "the usual tick is not moved by the spikes: " + r.medianTickNs + " ns");
+        helper.assertTrue(r.spikes != null, "the spikes are reported (over " + r.spikeThresholdNs + " ns)");
+        ScanReport s = r.spikes;
+        helper.assertTrue(s.ticks >= SPIKES && s.ticks <= SPIKES + 4,
+                "the " + SPIKES + " slow ticks are the spikes, maybe with a slow tick of the test server's own: " + s.ticks);
+        helper.assertTrue(s.tickNsMax >= SPIKE_NS && s.perTick(s.tickNsTotal) >= SPIKE_NS * 4 / 5,
+                "the spike ticks took their 25 ms: " + s.perTick(s.tickNsTotal) + " ns on average");
+        helper.assertTrue(s.phaseNs[Phase.SERVER] >= SPIKES * (SPIKE_NS - 1_000_000),
+                "the slow work is found where it ran, the server's own work: " + Arrays.toString(s.phaseNs));
+        helper.assertTrue(s.measuredNs() + s.phasesNs() <= s.tickNsTotal, "the spikes' things and parts fit in their ticks");
+        helper.assertTrue(r.tickNsTotal > s.tickNsTotal && r.phaseNs[Phase.SERVER] >= s.phaseNs[Phase.SERVER],
+                "the average has the spike ticks in it with every other tick");
+        BlockPos a = helper.absolutePos(BlockPos.ZERO);
+        BlockPos b = helper.absolutePos(new BlockPos(15, 15, 15));
+        List<ScanReport.Thing> hoppers = s.thingsWithin(helper.getLevel().dimension(), Kind.BLOCK_ENTITY, BlockPos.min(a, b), BlockPos.max(a, b))
+                .stream().filter(t -> t.type().equals("minecraft:hopper")).toList();
+        helper.assertTrue(hoppers.size() == 16 && hoppers.stream().allMatch(t -> t.calls() == s.ticks),
+                "the hoppers are in every spike tick: " + hoppers.size() + " of them");
         helper.succeed();
     }
 

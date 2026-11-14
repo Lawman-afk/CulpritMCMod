@@ -56,13 +56,30 @@ public final class ReportText {
         MutableComponent kinds = tr("report.measured", "Measured per tick: %s.", kindList(r));
         MutableComponent phases = tr("report.phases", "The tick's other parts: %s; Culprit's own timing about %s; not measured %s.",
                 phaseList(r), time(r.perTick(r.selfNs)), time(r.perTick(r.unaccountedNs())));
+        MutableComponent spikes = r.spikes == null
+                ? tr("report.no_spikes", "No lag spikes: no tick took over %s (twice the usual %s, and at least 5 ms).", time(r.spikeThresholdNs),
+                        time(r.medianTickNs))
+                : tr("report.spikes", "Lag spikes: %s ticks over %s (twice the usual %s, and at least 5 ms), %s on average; the costliest in them: %s.",
+                        r.spikes.ticks, time(r.spikeThresholdNs), time(r.medianTickNs), time(r.spikes.perTick(r.spikes.tickNsTotal)),
+                        topTypes(r.spikes, 3));
         MutableComponent more = tr("report.more", "Details: /culprit top things, types, mods or chunks.").withStyle(ChatFormatting.GRAY);
-        MutableComponent all = Component.empty().append(text).append("\n").append(kinds).append("\n").append(phases).append("\n").append(more);
+        MutableComponent all = Component.empty().append(text).append("\n").append(kinds).append("\n").append(phases).append("\n").append(spikes)
+                .append("\n").append(more);
         if (r.incomplete) {
             all.append("\n").append(tr("report.incomplete", "The scan met more than a million things and measured only the first million.")
                     .withStyle(ChatFormatting.YELLOW));
         }
         return all;
+    }
+
+    /** The costliest few types, as "minecraft:villager 1.20 ms, ...", per tick of the report. */
+    private static String topTypes(ScanReport r, int count) {
+        StringBuilder text = new StringBuilder();
+        for (int i = 0; i < Math.min(count, r.types.size()); i++) {
+            ScanReport.Group g = r.types.get(i);
+            text.append(i > 0 ? ", " : "").append(g.name()).append(' ').append(time(r.perTick(g.totalNs())));
+        }
+        return text.toString();
     }
 
     private static Component kindList(ScanReport r) {

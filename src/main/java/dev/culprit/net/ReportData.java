@@ -31,6 +31,10 @@ public final class ReportData {
     /** The tick's phases' own time ({@link Phase}), and Culprit's own timing, estimated. */
     public final long[] phaseNs = new long[Phase.COUNT];
     public long selfNs;
+    /** The scan's usual tick (its median), and the time over which a tick counts as a lag spike. */
+    public long medianTickNs, spikeThresholdNs;
+    /** The lag spikes: the same lists over the spike ticks only; null when no tick was one (and in a spikes report). */
+    public @org.jspecify.annotations.Nullable ReportData spikes;
     public String[] dims = new String[0];
     public String[] names = new String[0];
 
@@ -185,6 +189,9 @@ public final class ReportData {
         }
         d.dims = dims.list.toArray(String[]::new);
         d.names = names.list.toArray(String[]::new);
+        d.medianTickNs = r.medianTickNs;
+        d.spikeThresholdNs = r.spikeThresholdNs;
+        d.spikes = r.spikes == null ? null : of(r.spikes);
         return d;
     }
 
@@ -243,9 +250,20 @@ public final class ReportData {
             buf.writeVarLong(chunkTopNs[i]);
             buf.writeByte(chunkTopKind[i]);
         }
+        buf.writeVarLong(medianTickNs);
+        buf.writeVarLong(spikeThresholdNs);
+        buf.writeBoolean(spikes != null);
+        if (spikes != null) {
+            spikes.write(buf);
+        }
     }
 
     public static ReportData read(FriendlyByteBuf buf) {
+        return read(buf, true);
+    }
+
+    /** Reads a report, with a spikes report inside it only when {@code outer} (never one inside that). */
+    private static ReportData read(FriendlyByteBuf buf, boolean outer) {
         ReportData d = new ReportData();
         d.ticks = buf.readVarInt();
         d.tickNsTotal = buf.readVarLong();
@@ -328,6 +346,14 @@ public final class ReportData {
             d.chunkTop[i] = buf.readVarInt();
             d.chunkTopNs[i] = buf.readVarLong();
             d.chunkTopKind[i] = buf.readByte();
+        }
+        d.medianTickNs = buf.readVarLong();
+        d.spikeThresholdNs = buf.readVarLong();
+        if (buf.readBoolean()) {
+            if (!outer) {
+                throw new io.netty.handler.codec.DecoderException("Culprit: a spikes report inside a spikes report");
+            }
+            d.spikes = read(buf, false);
         }
         return d;
     }

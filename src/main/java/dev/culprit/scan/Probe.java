@@ -132,8 +132,9 @@ public final class Probe {
     /** A phase of the tick ({@link Phase}), its own time. */
     public static void phase(int phase, long ns) {
         CostTable t = table;
-        t.phaseNs[phase] += ns;
+        t.phaseTickNs[phase] += ns;
         t.phaseCalls++;
+        t.tickCalls++;
     }
 
     private static void perChunk(ServerLevel level, LevelChunk chunk, byte kind, String type, long ns) {

@@ -18,6 +18,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
@@ -57,9 +58,11 @@ public final class CulpritScreen extends Screen {
     private int picked = -1;
     private int left, top, right, bottom, listTop, listBottom;
     /** The header's layout for this window and report: the summary's lines, the bar, the key's entries and rows (init). */
-    private int summaryLines = 2, barY, legendRows = 1;
-    private final int[] legendW = new int[Breakdown.GROUPS];
-    private @Nullable ReportData layoutFor;
+    private int summaryLines = 2, barY, searchLeft;
+    /** The bar of the tick's height: its key is written inside it. */
+    private static final int BAR_H = 11;
+    private @Nullable ReportData layoutData;
+    private boolean layoutSpikes;
     /** Each tab's widest entry in its where and last columns for the report shown, or -1 until worked out. */
     private final int[] whereWidth = {-1, -1, -1, -1, -1}, lastWidth = {-1, -1, -1, -1, -1};
     private final List<Button> tabButtons = new ArrayList<>();
@@ -95,39 +98,35 @@ public final class CulpritScreen extends Screen {
         right = this.width - 10;
         bottom = this.height - 8;
         int inner = right - left - 16;
-        // The header follows the window and the report (a new report lays it out again): the summary's lines, the bar,
-        // the key's rows, then the tabs.
-        ReportData d = ClientReport.data();
-        layoutFor = d;
-        Component summary = d != null ? summary(d) : summaryText(Component.literal("99.99 ms"), "99.99 ms", 99999);
-        summaryLines = Math.clamp(this.font.split(summary, inner).size(), 1, 3);
-        barY = top + 18 + summaryLines * 10 + 2;
-        long[] groups = d != null ? Breakdown.groups(d) : null;
-        for (int i = 0; i < Breakdown.GROUPS; i++) {
-            String time = d != null ? ReportText.time(d.perTick(groups[i])) : "99.99 ms";
-            legendW[i] = 8 + this.font.width(Breakdown.groupName(i)) + 4 + this.font.width(time) + 10;
-        }
-        legendRows = legendRows(inner);
-        int tabsY = barY + 10 + legendRows * 10 + 2;
+        // The header follows the window, the report and the view (a new one lays it out again): the title row with the
+        // search box at its right, the summary's lines, the bar of the tick with its key inside, then the tabs and the
+        // Average / Lag spikes switch.
+        layoutData = ClientReport.data();
+        layoutSpikes = ClientReport.spikesShown();
+        ReportData d = ClientReport.view();
+        summaryLines = Math.clamp(this.font.split(headline(layoutData, d), inner).size(), 1, 3);
+        barY = top + 20 + summaryLines * 10 + 2;
+        int tabsY = barY + BAR_H + 5;
         listTop = tabsY + 21;
         listBottom = bottom - 28;
         tabButtons.clear();
-        int tabW = Math.min(58, (inner - 16) / TABS.length);
+        int viewW = Math.max(this.font.width(viewLabel(false)), this.font.width(viewLabel(true))) + 12;
+        int tabW = Math.min(58, (inner - viewW - 4 * (TABS.length + 1)) / TABS.length);
         int x = left + 8;
         for (int i = 0; i < TABS.length; i++) {
             int index = i;
             tabButtons.add(addRenderableWidget(Button.builder(tabLabel(i), button -> showTab(index)).bounds(x, tabsY, tabW, 16).build()));
             x += tabW + 4;
         }
-        // The search box: after the tabs, or on a row of its own under them when the window is narrow.
-        int searchX = x, searchW = right - 8 - x, searchY = tabsY;
-        if (searchW < 80) {
-            searchX = left + 8;
-            searchW = inner;
-            searchY = tabsY + 20;
-            listTop += 20;
-        }
-        search = addRenderableWidget(new EditBox(this.font, searchX, searchY, searchW, 16, tr("search", "Search")));
+        addRenderableWidget(Button.builder(viewLabel(layoutSpikes), b -> {
+            ClientReport.showSpikes(!ClientReport.spikesShown());
+            scroll = 0;
+            picked = -1;
+        }).bounds(x, tabsY, viewW, 16).tooltip(Tooltip.create(tr("view.about",
+                "Average: every tick of the scan. Lag spikes: only the ticks that took over twice the usual tick (and at least 5 ms), to find what makes them slow."))).build());
+        int searchW = Math.clamp(inner / 3, 80, 160);
+        searchLeft = right - 8 - searchW;
+        search = addRenderableWidget(new EditBox(this.font, searchLeft, top + 3, searchW, 14, tr("search", "Search")));
         search.setHint(tr("search.hint", "Search").withStyle(ChatFormatting.DARK_GRAY));
         search.setMaxLength(64);
         search.setValue(query);
@@ -191,8 +190,8 @@ public final class CulpritScreen extends Screen {
 
     @Override
     public void tick() {
-        if (ClientReport.data() != layoutFor) {
-            rebuildWidgets();                                  // a new report: its header laid out anew
+        if (ClientReport.data() != layoutData || ClientReport.spikesShown() != layoutSpikes) {
+            rebuildWidgets();                                  // a new report, or the other view: the header laid out anew
             return;
         }
         if (teleport != null) {
@@ -217,7 +216,8 @@ public final class CulpritScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
         super.extractRenderState(g, mouseX, mouseY, partial);
         g.text(this.font, this.title.copy().withStyle(ChatFormatting.BOLD), left + 8, top + 6, HEAD);
-        ReportData d = ClientReport.data();
+        ReportData all = ClientReport.data();
+        ReportData d = ClientReport.view();
         if (d != null && linesFor != d) {
             linesFor = d;
             tickLines = tickLines(d);
@@ -226,9 +226,9 @@ public final class CulpritScreen extends Screen {
             java.util.Arrays.fill(lastWidth, -1);
         }
         Component status = statusLine(d);
-        g.text(this.font, status, right - 8 - this.font.width(status), top + 6, DIM);
+        g.text(this.font, status, searchLeft - 6 - this.font.width(status), top + 6, DIM);
         int inner = right - left - 16;
-        if (d == null) {
+        if (all == null) {
             int y = listTop + 6;
             for (FormattedCharSequence line : this.font.split(tr("empty",
                     "No scan yet. Press %s to scan the server (operators); the results show here.",
@@ -238,15 +238,18 @@ public final class CulpritScreen extends Screen {
             }
             return;
         }
-        int y = top + 18;
-        for (FormattedCharSequence line : this.font.split(summary(d), inner)) {
-            if (y >= top + 18 + summaryLines * 10) {
+        int y = top + 20;
+        for (FormattedCharSequence line : this.font.split(headline(all, d), inner)) {
+            if (y >= top + 20 + summaryLines * 10) {
                 break;
             }
             g.text(this.font, line, left + 8, y, TEXT);
             y += 10;
         }
-        bar(g, d, left + 8, barY, inner);
+        if (d == null) {
+            return;                                            // the lag spikes' view of a scan that had none: the headline says so
+        }
+        bar(g, d, left + 8, barY, inner, mouseX, mouseY);
         rows(g, d, mouseX, mouseY);
     }
 
@@ -270,26 +273,38 @@ public final class CulpritScreen extends Screen {
                 ReportText.time(d.tickNsMax), d.ticks);
     }
 
+    /** The sentence over the lists: the whole scan's, its lag spikes', or that it had none. */
+    private static Component headline(@Nullable ReportData all, @Nullable ReportData d) {
+        if (all == null) {
+            return summaryText(Component.literal("99.99 ms"), "99.99 ms", 99999);    // (no report yet: the layout's widest)
+        }
+        if (!ClientReport.spikesShown()) {
+            return summary(all);
+        }
+        if (d == null) {
+            return tr("no_spikes", "No lag spikes in this scan: no tick took over %s (twice the usual %s, and at least 5 ms). The slowest took %s.",
+                    ReportText.time(all.spikeThresholdNs), ReportText.time(all.medianTickNs), ReportText.time(all.tickNsMax));
+        }
+        return tr("spikes_summary", "%s lag spikes: ticks over %s (twice the usual %s, and at least 5 ms). In them the tick took %s on average and %s at worst. Below, what each part took in them.",
+                d.ticks, ReportText.time(all.spikeThresholdNs), ReportText.time(all.medianTickNs),
+                Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal)))),
+                ReportText.time(d.tickNsMax));
+    }
+
+    private static Component viewLabel(boolean spikes) {
+        return spikes ? tr("view.spikes", "Lag spikes").withStyle(ChatFormatting.GOLD) : tr("view.average", "Average");
+    }
+
     private static Component summaryText(Component mean, String worst, int ticks) {
         return tr("summary2", "The server tick took %s on average and %s at worst over %s ticks (a tick has 50 ms). Below, all of it: what each part took.",
                 mean, worst, ticks);
     }
 
-    private int legendRows(int width) {
-        int kx = 0, rows = 1;
-        for (int i = 0; i < Breakdown.GROUPS; i++) {
-            int w = legendW[i];
-            if (kx > 0 && kx + w > width) {
-                rows++;
-                kx = 0;
-            }
-            kx += w;
-        }
-        return rows;
-    }
-
-    /** The whole tick as one bar, a coloured length per group, and the groups' names and times under it. */
-    private void bar(GuiGraphicsExtractor g, ReportData d, int x, int y, int width) {
+    /**
+     * The whole tick as one bar, a coloured length per group, each with its name and time per tick written inside when
+     * they fit (the time alone when only it does), and all of it in a tooltip over the part under the mouse.
+     */
+    private void bar(GuiGraphicsExtractor g, ReportData d, int x, int y, int width, int mouseX, int mouseY) {
         long[] groups = Breakdown.groups(d);
         long total = 0;
         for (long ns : groups) {
@@ -299,30 +314,32 @@ public final class CulpritScreen extends Screen {
             return;
         }
         int bx = x;
+        Component hovered = null;
         for (int i = 0; i < Breakdown.GROUPS; i++) {
             int w = (int) Math.round((double) groups[i] / total * width);
             if (i == Breakdown.GROUPS - 1) {
                 w = x + width - bx;
             }
             if (w > 0) {
-                g.fill(bx, y, bx + w, y + 7, 0xFF000000 | Breakdown.COLOUR[i]);
+                int colour = Breakdown.COLOUR[i];
+                g.fill(bx, y, bx + w, y + BAR_H, 0xFF000000 | colour);
+                String time = ReportText.time(d.perTick(groups[i]));
+                Component full = Breakdown.groupName(i).copy().append(" " + time);
+                Component label = this.font.width(full) + 6 <= w ? full : this.font.width(time) + 4 <= w ? Component.literal(time) : null;
+                if (label != null) {
+                    // Dark writing on the light colours, white on the dark ones.
+                    int r = colour >> 16 & 0xFF, gr = colour >> 8 & 0xFF, b = colour & 0xFF;
+                    int ink = 0.299 * r + 0.587 * gr + 0.114 * b > 140 ? 0xFF101216 : 0xFFFFFFFF;
+                    g.text(this.font, label, bx + (w - this.font.width(label)) / 2, y + 2, ink, false);
+                }
+                if (mouseX >= bx && mouseX < bx + w && mouseY >= y && mouseY < y + BAR_H) {
+                    hovered = full;
+                }
             }
             bx += w;
         }
-        // The key: each group's square, name and time per tick, as many to a line as fit.
-        int kx = x, ky = y + 10;
-        for (int i = 0; i < Breakdown.GROUPS; i++) {
-            Component name = Breakdown.groupName(i);
-            String time = ReportText.time(d.perTick(groups[i]));
-            int w = legendW[i];
-            if (kx > x && kx + w > x + width) {
-                kx = x;
-                ky += 10;
-            }
-            g.fill(kx, ky + 1, kx + 6, ky + 7, 0xFF000000 | Breakdown.COLOUR[i]);
-            g.text(this.font, name, kx + 8, ky, DIM);
-            g.text(this.font, time, kx + 8 + this.font.width(name) + 4, ky, TEXT);
-            kx += w;
+        if (hovered != null) {
+            g.setTooltipForNextFrame(hovered, mouseX, mouseY);
         }
     }
 
@@ -500,7 +517,7 @@ public final class CulpritScreen extends Screen {
     public boolean keyPressed(KeyEvent event) {
         // Enter in the search box picks the first line found (marked, ready to teleport to).
         if (search != null && search.isFocused() && event.isConfirmation()) {
-            ReportData d = ClientReport.data();
+            ReportData d = ClientReport.view();
             if (d != null) {
                 int[] found = visible(d);
                 if (found.length > 0) {
@@ -678,7 +695,7 @@ public final class CulpritScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        ReportData d = ClientReport.data();
+        ReportData d = ClientReport.view();
         if (d != null && event.button() == 0 && event.y() >= listTop + ROW && event.y() < listBottom && event.x() >= left + 6 && event.x() < right - 10) {
             int r = (int) ((event.y() - (listTop + ROW)) / ROW);
             int[] found = visible(d);
@@ -722,14 +739,14 @@ public final class CulpritScreen extends Screen {
 
     /** Selects a line as a click would (the Lab's pictures). */
     public void pickRow(int i) {
-        ReportData d = ClientReport.data();
+        ReportData d = ClientReport.view();
         if (d != null && i >= 0 && i < rowCount(d)) {
             pick(d, i);
         }
     }
 
     private void teleport() {
-        ReportData d = ClientReport.data();
+        ReportData d = ClientReport.view();
         Minecraft mc = Minecraft.getInstance();
         if (d == null || picked < 0 || !markable() || mc.getConnection() == null || mc.player == null) {
             return;

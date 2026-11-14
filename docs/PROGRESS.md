@@ -7,7 +7,8 @@ the tick. A scan starts from the scan menu (F8) or `/culprit scan`; the chat say
 results; the results screen (F9: Tick, Things, Types, Mods, Chunks, with a search box) shows the rest, and on the
 world when the player asks (a white outline and a readout under the crosshair for the thing looked at). The GameTests
 (the developer's checks, left out of the jar) plant lag sources of each kind and find every one at its place. spark
-researched; its ideas are with the user to choose from.
+researched; of its ideas the user chose lag spikes: the same scan now keeps its slowest ticks, and the results switch
+between the average and the lag spikes.
 
 ## Plan
 

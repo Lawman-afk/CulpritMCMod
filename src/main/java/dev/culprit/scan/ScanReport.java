@@ -60,9 +60,20 @@ public final class ScanReport {
     public final List<Group> types;
     public final List<Group> mods;
     public final List<ChunkGroup> chunks;
+    /** The scan's usual tick (the median of its ticks), and the time over which a tick is a lag spike. */
+    public final long medianTickNs, spikeThresholdNs;
+    /** The lag spikes: the same lists over the spike ticks only; null when no tick was one (and in a spikes report). */
+    public final @Nullable ScanReport spikes;
+
+    /** A tick is a lag spike when it takes over twice the scan's usual tick, and at least this long. */
+    public static final long SPIKE_FLOOR_NS = 5_000_000;
 
     private ScanReport(int ticks, long tickNsTotal, long tickNsMax, long startedAtMillis, boolean incomplete, long[] phaseNs, long selfNs,
-                       List<Thing> things, List<Group> types, List<Group> mods, List<ChunkGroup> chunks) {
+                       List<Thing> things, List<Group> types, List<Group> mods, List<ChunkGroup> chunks, long medianTickNs, long spikeThresholdNs,
+                       @Nullable ScanReport spikes) {
+        this.medianTickNs = medianTickNs;
+        this.spikeThresholdNs = spikeThresholdNs;
+        this.spikes = spikes;
         System.arraycopy(phaseNs, 0, this.phaseNs, 0, Phase.COUNT);
         this.selfNs = selfNs;
         this.ticks = ticks;
@@ -112,16 +123,58 @@ public final class ScanReport {
         return colon < 0 ? "minecraft" : type.substring(0, colon);
     }
 
-    static ScanReport of(CostTable t, int ticks, long tickNsTotal, long tickNsMax, long startedAtMillis, long selfNs) {
+    /**
+     * A scan's report from its table: every tick's average, and beside it the lag spikes, the kept slowest ticks that
+     * took over twice the usual tick (and at least {@link #SPIKE_FLOOR_NS}), with what each thing and part took in them.
+     */
+    static ScanReport of(CostTable t, int ticks, long tickNsTotal, long tickNsMax, long startedAtMillis, long perCallNs) {
+        long[] times = t.tickTimes.toLongArray();
+        java.util.Arrays.sort(times);
+        long median = times.length == 0 ? 0 : times[times.length / 2];
+        long threshold = Math.max(2 * median, SPIKE_FLOOR_NS);
+        long[] total = new long[t.size], max = new long[t.size], calls = new long[t.size], phases = new long[Phase.COUNT];
+        int spikeTicks = 0;
+        long spikeTotal = 0, spikeMax = 0, spikeCalls = 0;
+        for (CostTable.TickRecord record : t.kept) {
+            if (record.tickNs <= threshold) {
+                continue;
+            }
+            spikeTicks++;
+            spikeTotal += record.tickNs;
+            spikeMax = Math.max(spikeMax, record.tickNs);
+            spikeCalls += record.calls;
+            for (int k = 0; k < record.size; k++) {
+                int s = record.slots[k];
+                total[s] += record.ns[k];
+                max[s] = Math.max(max[s], record.ns[k]);
+                calls[s]++;
+            }
+            for (int p = 0; p < Phase.COUNT; p++) {
+                phases[p] += record.phases[p];
+            }
+        }
+        ScanReport spikes = spikeTicks == 0 ? null : build(t, total, max, calls, true, spikeTicks, spikeTotal, spikeMax, startedAtMillis, phases,
+                spikeCalls * perCallNs, median, threshold, null);
+        return build(t, t.totalNs, t.maxNs, t.calls, false, ticks, tickNsTotal, tickNsMax, startedAtMillis, t.phaseNs, t.calls() * perCallNs,
+                median, threshold, spikes);
+    }
+
+    /** A report over some of the scan's ticks: each thing's total, worst and calls in them, and the phases'. */
+    private static ScanReport build(CostTable t, long[] totals, long[] maxes, long[] calls, boolean spikesOnly, int ticks, long tickNsTotal,
+                                    long tickNsMax, long startedAtMillis, long[] phaseNs, long selfNs, long median, long threshold,
+                                    @Nullable ScanReport spikes) {
         List<Thing> things = new ArrayList<>(t.size);
         for (int s = 0; s < t.size; s++) {
+            if (spikesOnly && calls[s] == 0) {
+                continue;                                   // not in any of the spike ticks
+            }
             long pos = t.pos[s];
             int entityId = -1;
             if (t.ref[s] instanceof Entity entity && !entity.isRemoved()) {
                 pos = entity.blockPosition().asLong();   // where it is now, not where it was first measured
                 entityId = entity.getId();
             }
-            things.add(new Thing(t.kind[s], t.levels.get(t.level[s]), pos, t.typeNames.get(t.type[s]), t.totalNs[s], t.maxNs[s], t.calls[s], entityId));
+            things.add(new Thing(t.kind[s], t.levels.get(t.level[s]), pos, t.typeNames.get(t.type[s]), totals[s], maxes[s], calls[s], entityId));
         }
         Comparator<Thing> costliest = Comparator.comparingLong(Thing::totalNs).reversed();
         things.sort(costliest);
@@ -157,8 +210,8 @@ public final class ScanReport {
         types.sort(Comparator.comparingLong(Group::totalNs).reversed());
         mods.sort(Comparator.comparingLong(Group::totalNs).reversed());
         chunks.sort(Comparator.comparingLong(ChunkGroup::totalNs).reversed());
-        return new ScanReport(ticks, tickNsTotal, tickNsMax, startedAtMillis, t.full, t.phaseNs, selfNs, Collections.unmodifiableList(things),
-                Collections.unmodifiableList(types), Collections.unmodifiableList(mods), Collections.unmodifiableList(chunks));
+        return new ScanReport(ticks, tickNsTotal, tickNsMax, startedAtMillis, t.full, phaseNs, selfNs, Collections.unmodifiableList(things),
+                Collections.unmodifiableList(types), Collections.unmodifiableList(mods), Collections.unmodifiableList(chunks), median, threshold, spikes);
     }
 
     private static void add(Map<String, long[]> sums, Map<String, Thing> worst, String key, Thing th) {

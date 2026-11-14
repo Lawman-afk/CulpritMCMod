@@ -22,11 +22,28 @@ public final class ClientReport {
     private static int stateTicks;
     private static long stateMillis;
     private static int scanSeconds;
+    /** Whether the results show the lag spikes rather than the average of every tick. */
+    private static boolean spikesShown;
 
     private ClientReport() {}
 
     public static @Nullable ReportData data() {
         return data;
+    }
+
+    /** The report shown: the average of every tick, or the lag spikes (null when there were none). */
+    public static @Nullable ReportData view() {
+        return data == null ? null : spikesShown ? data.spikes : data;
+    }
+
+    public static boolean spikesShown() {
+        return spikesShown;
+    }
+
+    /** Shows the lag spikes, or the average again, in the results and on the world. */
+    public static void showSpikes(boolean on) {
+        spikesShown = on;
+        Overlay.newReport(view());
     }
 
     public static long receivedMillis() {
@@ -50,7 +67,7 @@ public final class ClientReport {
         if (state == CulpritNetwork.Status.STARTED || state == CulpritNetwork.Status.BUSY) {
             state = -1;
         }
-        Overlay.newReport(report);
+        Overlay.newReport(view());
         say(finished(report));
     }
 
@@ -97,6 +114,8 @@ public final class ClientReport {
                 "Done. The server tick took %s on average and %s at worst (it has 50 ms).",
                 Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal)))),
                 ReportText.time(d.tickNsMax)).withStyle(ChatFormatting.WHITE));
+        line.append(" ").append((d.spikes == null ? Component.translatableWithFallback("culprit.chat.no_spikes", "No lag spikes.")
+                : Component.translatableWithFallback("culprit.chat.spikes", "Lag spikes: %s.", d.spikes.ticks)).withStyle(ChatFormatting.WHITE));
         if (d.types > 0) {
             MutableComponent top = Component.empty();
             for (int i = 0; i < Math.min(3, d.types); i++) {
@@ -150,6 +169,7 @@ public final class ClientReport {
     static void clear() {
         data = null;
         state = -1;
+        spikesShown = false;
         Overlay.newReport(null);
         Overlay.setShown(false);                               // hidden again in the next world, until asked for
     }

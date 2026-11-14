@@ -40,9 +40,11 @@ import net.minecraft.world.level.LevelSettings;
 import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CommandBlock;
 import net.minecraft.world.level.block.HopperBlock;
 import net.minecraft.world.level.block.ObserverBlock;
 import net.minecraft.world.level.block.StandingSignBlock;
+import net.minecraft.world.level.block.entity.CommandBlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignText;
 import net.minecraft.world.level.block.entity.SignTextSlot;
@@ -79,7 +81,7 @@ public final class Lab {
     private static final int NO_SCREEN = -1, SCAN_MENU = -2, SCAN_RUNNING = -3, CHAT = -4, LOOK = -5;
 
     /** A picture: its name, where it is taken from and which way it looks, and what is on screen. */
-    private record View(String name, Vec3 at, float yaw, float pitch, int screenTab, boolean mark, String search) {}
+    private record View(String name, Vec3 at, float yaw, float pitch, int screenTab, boolean mark, String search, boolean spikes) {}
 
     private static boolean worldMade, built, scanned, hudWanted;
     private static int waited, shot;
@@ -159,6 +161,9 @@ public final class Lab {
             }
             hudWanted = v.screenTab() == CHAT || v.screenTab() == LOOK;    // the readout under the crosshair is on the HUD
             Overlay.setShown(true);                                // as the results screen's button does
+            if (ClientReport.spikesShown() != v.spikes()) {
+                ClientReport.showSpikes(v.spikes());               // as the results screen's Average / Lag spikes switch does
+            }
             if (v.screenTab() >= 0) {
                 CulpritScreen.showTab(v.screenTab());
                 if (!(mc.gui.screen() instanceof CulpritScreen)) {
@@ -212,7 +217,8 @@ public final class Lab {
         var commands = level.getServer().getCommands();
         var source = level.getServer().createCommandSourceStack().withSuppressedOutput();
         for (String c : List.of("time set 6000", "gamerule advance_time false", "gamerule advance_weather false", "weather clear",
-                "gamerule spawn_mobs false", "difficulty peaceful", "kill @e[type=!player]")) {
+                "gamerule spawn_mobs false", "difficulty peaceful", "kill @e[type=!player]", "gamerule command_block_output false",
+                "scoreboard objectives add culprit_lab dummy")) {
             commands.performPrefixedCommand(source, c);
         }
         for (int cx = -3; cx <= 3; cx++) {
@@ -299,6 +305,25 @@ public final class Lab {
         level.setBlock(new BlockPos(1, y + 2, -1), Blocks.OBSERVER.defaultBlockState().setValue(ObserverBlock.FACING, Direction.WEST), 3);
         sign(level, new BlockPos(-4, y, 1), List.of("Observer clock", "and pistons:", "block ticks and", "block events"));
 
+        // Lag spikes: command blocks counting ticks, and every 3 seconds a big /fill (8,192 blocks of stone behind
+        // everything, then air again): a few slow ticks among quick ones, charged to the repeating command block.
+        String box = "-16 " + (y + 1) + " 24 15 " + (y + 8) + " 55";
+        List<String> clock = List.of("scoreboard players add #clock culprit_lab 1",
+                "execute if score #clock culprit_lab matches 60 run fill " + box + " minecraft:stone",
+                "execute if score #clock culprit_lab matches 120.. run fill " + box + " minecraft:air",
+                "execute if score #clock culprit_lab matches 120.. run scoreboard players set #clock culprit_lab 0");
+        for (int k = 0; k < clock.size(); k++) {
+            BlockPos at = new BlockPos(17 + k, y, 0);
+            level.setBlock(at, (k == 0 ? Blocks.REPEATING_COMMAND_BLOCK : Blocks.CHAIN_COMMAND_BLOCK).defaultBlockState()
+                    .setValue(CommandBlock.FACING, Direction.EAST), 3);
+            if (level.getBlockEntity(at) instanceof CommandBlockEntity block) {
+                block.getCommandBlock().setCommand(clock.get(k));
+                block.setAutomatic(true);
+                block.setChanged();
+            }
+        }
+        sign(level, new BlockPos(18, y, 2), List.of("Command blocks:", "a big /fill every", "3 seconds:", "lag spikes"));
+
         // The spawn, with what to do.
         sign(level, new BlockPos(0, y, 3), List.of("Culprit Lab", "F8: scan menu", "F9: results", "(rebindable)"));
         sign(level, new BlockPos(2, y, 3), List.of("Or type", "/culprit scan", "then /culprit", "top things"));
@@ -323,7 +348,10 @@ public final class Lab {
         list.add(eye("screen_types", 1.5, y + 1.6, 2.5, 180f, 10f, 2, false));
         list.add(eye("screen_mods", 1.5, y + 1.6, 2.5, 180f, 10f, 3, false));
         list.add(eye("screen_chunks", 1.5, y + 1.6, 2.5, 180f, 10f, 4, false));
-        list.add(new View("screen_search", new Vec3(1.5, y + 1.6 - 1.62, 2.5), 180f, 10f, 1, false, "hopper"));
+        list.add(new View("screen_search", new Vec3(1.5, y + 1.6 - 1.62, 2.5), 180f, 10f, 1, false, "hopper", false));
+        list.add(new View("screen_spikes", new Vec3(1.5, y + 1.6 - 1.62, 2.5), 180f, 10f, 0, false, "", true));
+        list.add(new View("screen_spikes_things", new Vec3(1.5, y + 1.6 - 1.62, 2.5), 180f, 10f, 1, false, "", true));
+        list.add(new View("overview_spikes", new Vec3(0.5, y + 16.0 - 1.62, -24.0), 0f, 32f, NO_SCREEN, false, "", true));
         list.add(eye("scan_menu", 1.5, y + 1.6, 2.5, 180f, 10f, SCAN_MENU, false));
         list.add(eye("scan_running", 1.5, y + 1.6, 2.5, 180f, 10f, SCAN_RUNNING, false));
         list.add(eye("chat", 1.5, y + 1.6, 2.5, 180f, 10f, CHAT, false));
@@ -333,7 +361,7 @@ public final class Lab {
 
     /** A view from an eye at (x, eyeY, z): the player's feet put 1.62 below it. */
     private static View eye(String name, double x, double eyeY, double z, float yaw, float pitch, int screenTab, boolean mark) {
-        return new View(name, new Vec3(x, eyeY - 1.62, z), yaw, pitch, screenTab, mark, "");
+        return new View(name, new Vec3(x, eyeY - 1.62, z), yaw, pitch, screenTab, mark, "", false);
     }
 
     /** A glass room with a floor of stone: walls and roof of glass. */

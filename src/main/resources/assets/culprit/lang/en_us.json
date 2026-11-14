@@ -125,6 +125,13 @@
   "culprit.screen.none_found": "Nothing in this list matches \"%s\".",
   "culprit.readout.thing": "worst tick %s, %s",
   "culprit.readout.cost": " a tick, %s of the tick",
-  "culprit.readout.chunk": "Chunk %s, %s",
-  "culprit.readout.chunk_things": "%s things, mostly %s"
+  "culprit.chat.spikes": "Lag spikes: %s.",
+  "culprit.chat.no_spikes": "No lag spikes.",
+  "culprit.screen.view.average": "Average",
+  "culprit.screen.view.spikes": "Lag spikes",
+  "culprit.screen.view.about": "Average: every tick of the scan. Lag spikes: only the ticks that took over twice the usual tick (and at least 5 ms), to find what makes them slow.",
+  "culprit.screen.no_spikes": "No lag spikes in this scan: no tick took over %s (twice the usual %s, and at least 5 ms). The slowest took %s.",
+  "culprit.screen.spikes_summary": "%s lag spikes: ticks over %s (twice the usual %s, and at least 5 ms). In them the tick took %s on average and %s at worst. Below, what each part took in them.",
+  "culprit.report.spikes": "Lag spikes: %s ticks over %s (twice the usual %s, and at least 5 ms), %s on average; the costliest in them: %s.",
+  "culprit.report.no_spikes": "No lag spikes: no tick took over %s (twice the usual %s, and at least 5 ms)."
 }

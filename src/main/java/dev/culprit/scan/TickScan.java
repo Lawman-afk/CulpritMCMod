@@ -101,14 +101,14 @@ public final class TickScan {
         long tickNs = System.nanoTime() - scan.tickStartNs;
         scan.tickNsTotal += tickNs;
         scan.tickNsMax = Math.max(scan.tickNsMax, tickNs);
-        scan.table.endTick();
+        scan.table.endTick(tickNs);
         if (++scan.ticksDone >= scan.ticksWanted) {
             scan.finish(true);
         }
     }
 
     private void begin() {
-        table = new CostTable();
+        table = new CostTable(Math.clamp(ticksWanted / 20, 5, 60));   // the slowest 5 % of ticks kept whole, for the spikes
         Probe.table = table;
         Probe.thread = Thread.currentThread();
         Probe.overheadNs = timerCost();
@@ -122,7 +122,7 @@ public final class TickScan {
         Probe.table = null;
         running = null;
         if (report) {
-            ScanReport r = ScanReport.of(table, ticksDone, tickNsTotal, tickNsMax, startedAtMillis, table.calls() * Probe.perCallNs);
+            ScanReport r = ScanReport.of(table, ticksDone, tickNsTotal, tickNsMax, startedAtMillis, Probe.perCallNs);
             last = r;
             if (onDone != null) {
                 onDone.accept(r);

@@ -49,8 +49,8 @@ import net.neoforged.neoforge.common.NeoForge;
  * A scan's results drawn on the world (DESIGN §4.4): a box round each costly thing near the player, in the cost's
  * colour, fainter for cheap things; names and costs over the costliest close ones, all one size on screen, never two
  * over each other; each costly chunk outlined on the ground with its total; the thing picked in the Culprit screen
- * marked by a beam and a label seen through walls; and the thing (or chunk) the crosshair rests on outlined in white,
- * with its cost read out under the crosshair. Off until the player shows it from the results screen.
+ * marked by a beam and a label seen through walls; and the thing the crosshair rests on outlined in white, with its
+ * cost read out under the crosshair. Off until the player shows it from the results screen.
  * <p>
  * Drawn after the level, into the finished picture, depth tested against it, the way Ground Burst draws its effects:
  * a shader pack or Distant Horizons cannot draw over it or change its look. The boxes and outlines are gathered into
@@ -96,11 +96,10 @@ public final class Overlay {
     private static final double[] PLACED = new double[(MAX_LABELS + MAX_CHUNK_LABELS + 1) * 4];
     private static int placed;
     private static final org.joml.Vector3f RIGHT = new org.joml.Vector3f(), UP = new org.joml.Vector3f(), FORWARD = new org.joml.Vector3f();
-    // What the crosshair rests on this frame: a boxed thing (its index, and its box's), else an outlined chunk; -1 for none.
-    private static int lookThing = -1, lookBox = -1, lookChunk = -1;
+    // The boxed thing the crosshair rests on this frame (its index, and its box's), or -1.
+    private static int lookThing = -1, lookBox = -1;
     // The view's half-angles as tangents (with a little margin), for which labels are on screen.
     private static double viewTanH, viewTanV;
-    private static final int[] TILE_CHUNK = new int[MAX_TILES];
     // The readout's lines, made when what the crosshair rests on changes.
     private static final List<FormattedCharSequence> READOUT = new ArrayList<>(3);
     private static long readoutKey = Long.MIN_VALUE;
@@ -159,7 +158,7 @@ public final class Overlay {
     }
 
     private static void draw(RenderLevelStageEvent.AfterLevel event) {
-        lookThing = lookBox = lookChunk = -1;
+        lookThing = lookBox = -1;
         ReportData r = report;
         Minecraft mc = Minecraft.getInstance();
         if (!shown || r == null || mc.level == null || mc.player == null) {
@@ -200,6 +199,9 @@ public final class Overlay {
                 continue;                               // the player's own box would surround the camera
             }
             AABB box = boxOf(r, i, level);
+            if (box == null) {
+                continue;
+            }
             double cx = (box.minX + box.maxX) / 2 - cam.x, cy = (box.minY + box.maxY) / 2 - cam.y, cz = (box.minZ + box.maxZ) / 2 - cam.z;
             if (cx * cx + cy * cy + cz * cz > range2 || box.contains(cam)) {
                 continue;
@@ -246,31 +248,15 @@ public final class Overlay {
             corner(level, cam, x0 + 16, z0, o + 3);
             corner(level, cam, x0 + 16, z0 + 16, o + 6);
             corner(level, cam, x0, z0 + 16, o + 9);
-            TILE_CHUNK[tiles] = i;
             TILE_HEAT[tiles++] = Heat.of(r.perTick(r.chunkTotal[i]));
-        }
-        if (lookThing < 0) {
-            // Not on a thing: the outlined chunk whose ground the crosshair is on.
-            Vec3 to = cam.add(FORWARD.x * RANGE, FORWARD.y * RANGE, FORWARD.z * RANGE);
-            BlockHitResult hit = level.clip(new ClipContext(cam, to, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, CollisionContext.empty()));
-            if (hit.getType() == HitResult.Type.BLOCK) {
-                int hx = hit.getBlockPos().getX() >> 4, hz = hit.getBlockPos().getZ() >> 4;
-                for (int i = 0; i < r.chunks; i++) {
-                    if (r.chunkDim[i] == dim && r.chunkX[i] == hx && r.chunkZ[i] == hz) {
-                        if (r.chunkTotal[i] >= floor) {
-                            lookChunk = i;
-                        }
-                        break;
-                    }
-                }
-            }
         }
 
         beam = false;
         BlockPos mark = null;
         if (markedThing >= 0 && markedThing < r.things && r.dim[markedThing] == dim) {
             AABB box = boxOf(r, markedThing, level);
-            mark = BlockPos.containing((box.minX + box.maxX) / 2, box.minY, (box.minZ + box.maxZ) / 2);
+            mark = box == null ? BlockPos.of(r.pos[markedThing])      // gone: where it was last
+                    : BlockPos.containing((box.minX + box.maxX) / 2, box.minY, (box.minZ + box.maxZ) / 2);
         } else if (markedChunk >= 0 && markedChunk < r.chunks && r.chunkDim[markedChunk] == dim) {
             int x = (r.chunkX[markedChunk] << 4) + 8, z = (r.chunkZ[markedChunk] << 4) + 8;
             mark = new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), z);
@@ -346,13 +332,14 @@ public final class Overlay {
         return r.entity[i] >= 0 && mc.player != null && r.entity[i] == mc.player.getId();
     }
 
-    /** A thing's box: an entity's own, followed while the client has it; else its block. */
-    private static AABB boxOf(ReportData r, int i, ClientLevel level) {
-        if (r.entity[i] >= 0) {
-            Entity e = level.getEntity(r.entity[i]);
-            if (e != null && e.isAlive()) {
-                return e.getBoundingBox().inflate(0.04);
-            }
+    /**
+     * A thing's box: an entity's own, followed while the client has it; a block's. An entity the client no longer has (an
+     * item picked up, a mob killed or gone) has none: boxing its old place would box a whole block of nothing.
+     */
+    private static @Nullable AABB boxOf(ReportData r, int i, ClientLevel level) {
+        if (r.kind[i] == Kind.ENTITY) {
+            Entity e = r.entity[i] >= 0 ? level.getEntity(r.entity[i]) : null;
+            return e != null && e.isAlive() ? e.getBoundingBox().inflate(0.04) : null;
         }
         return new AABB(BlockPos.of(r.pos[i])).inflate(0.015);
     }
@@ -372,9 +359,8 @@ public final class Overlay {
         for (int t = 0; t < tiles; t++) {
             int o = t * 12;
             float heat = TILE_HEAT[t];
-            boolean looked = TILE_CHUNK[t] == lookChunk;
-            int c = looked ? 0xFFFFFFFF : Heat.argb(heat, (int) (150 + 100 * heat));
-            float w = looked ? 4.5f : 2f + 2f * heat;
+            int c = Heat.argb(heat, (int) (150 + 100 * heat));
+            float w = 2f + 2f * heat;
             for (int k = 0; k < 4; k++) {
                 int a = o + k * 3, b = o + ((k + 1) % 4) * 3;
                 line(buffer, pose, TILE[a], TILE[a + 1], TILE[a + 2], TILE[b], TILE[b + 1], TILE[b + 2], c, w);
@@ -413,6 +399,9 @@ public final class Overlay {
         viewTanH = viewTanV * mc.getWindow().getWidth() / Math.max(1, mc.getWindow().getHeight());
         if (markedThing >= 0 && markedThing < r.things && r.dim[markedThing] == dim) {
             AABB box = boxOf(r, markedThing, level);
+            if (box == null) {
+                box = new AABB(BlockPos.of(r.pos[markedThing]));     // gone: where it was last
+            }
             label(font, cam, facing, (box.minX + box.maxX) / 2, box.maxY + 0.7, (box.minZ + box.maxZ) / 2, name(r, markedThing),
                     cost(r, markedThing), Font.DisplayMode.SEE_THROUGH, true);
         } else if (markedChunk >= 0 && markedChunk < r.chunks && r.chunkDim[markedChunk] == dim) {
@@ -433,6 +422,9 @@ public final class Overlay {
                 break;
             }
             AABB box = boxOf(r, i, level);
+            if (box == null) {
+                continue;
+            }
             double x = (box.minX + box.maxX) / 2, y = box.maxY + 0.45, z = (box.minZ + box.maxZ) / 2;
             double dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
             if (dx * dx + dy * dy + dz * dz > range2 || !onScreen(dx, dy, dz)) {
@@ -547,16 +539,16 @@ public final class Overlay {
     }
 
     /**
-     * The readout under the crosshair (a HUD layer, CulpritClient): the boxed thing it rests on, or the outlined chunk,
-     * with its cost. Its lines are made when what it rests on changes, not every frame.
+     * The readout under the crosshair (a HUD layer, CulpritClient): the boxed thing it rests on, with its cost. Its
+     * lines are made when what it rests on changes, not every frame.
      */
     public static void drawReadout(GuiGraphicsExtractor g, DeltaTracker delta) {
         ReportData r = report;
         Minecraft mc = Minecraft.getInstance();
-        if (!shown || r == null || mc.gui.hud.isHidden() || mc.gui.screen() != null || (lookThing < 0 && lookChunk < 0)) {
+        if (!shown || r == null || mc.gui.hud.isHidden() || mc.gui.screen() != null || lookThing < 0 || lookThing >= r.things) {
             return;
         }
-        long key = lookThing >= 0 ? lookThing : -2L - lookChunk;
+        long key = lookThing;
         if (key != readoutKey || readoutFor != r) {
             readoutKey = key;
             readoutFor = r;
@@ -574,24 +566,14 @@ public final class Overlay {
 
     private static void makeReadout(ReportData r, Font font) {
         READOUT.clear();
-        long total;
-        if (lookThing >= 0 && lookThing < r.things) {
-            int i = lookThing;
-            total = r.total[i];
-            String type = r.names[r.type[i]];
-            int colon = type.indexOf(':');
-            READOUT.add(name(r, i));
-            READOUT.add(costLine(r, total));
-            READOUT.add(Component.translatableWithFallback("culprit.readout.thing", "worst tick %s, %s", ReportText.time(r.max[i]),
-                    Names.mod(colon < 0 ? "minecraft" : type.substring(0, colon))).withColor(0xA8AFBA).getVisualOrderText());
-        } else {
-            int c = lookChunk;
-            total = r.chunkTotal[c];
-            READOUT.add(Component.translatableWithFallback("culprit.readout.chunk", "Chunk %s, %s", r.chunkX[c], r.chunkZ[c]).getVisualOrderText());
-            READOUT.add(costLine(r, total));
-            READOUT.add(Component.translatableWithFallback("culprit.readout.chunk_things", "%s things, mostly %s", r.chunkCount[c],
-                    Names.of(r.names[r.chunkTop[c]], r.chunkTopKind[c])).withColor(0xA8AFBA).getVisualOrderText());
-        }
+        int i = lookThing;
+        long total = r.total[i];
+        String type = r.names[r.type[i]];
+        int colon = type.indexOf(':');
+        READOUT.add(name(r, i));
+        READOUT.add(costLine(r, total));
+        READOUT.add(Component.translatableWithFallback("culprit.readout.thing", "worst tick %s, %s", ReportText.time(r.max[i]),
+                Names.mod(colon < 0 ? "minecraft" : type.substring(0, colon))).withColor(0xA8AFBA).getVisualOrderText());
         readoutWidth = 0;
         for (FormattedCharSequence line : READOUT) {
             readoutWidth = Math.max(readoutWidth, font.width(line));
