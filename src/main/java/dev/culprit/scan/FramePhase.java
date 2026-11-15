@@ -7,14 +7,14 @@ package dev.culprit.scan;
  */
 public final class FramePhase {
     public static final int CLIENT_TICK = 0, PACKETS = 1, EXTRACT = 2, PARTICLES = 3, SUBMIT = 4, BATCHING = 5, DRAWING = 6, CHUNKS = 7,
-            GUI = 8, MOD_EVENTS = 9, PRESENT = 10, LIMIT = 11, FEATURES = 12, SHADOWS = 13, FAR_TERRAIN = 14;
-    public static final int COUNT = 15;
+            GUI = 8, MOD_EVENTS = 9, PRESENT = 10, LIMIT = 11, FEATURES = 12, SHADOWS = 13, FAR_TERRAIN = 14, LIGHT = 15;
+    public static final int COUNT = 16;
 
     private static final String[] KEYS = {"client_tick", "packets", "extract", "particles", "submit", "batching", "drawing", "chunks", "gui",
-            "mod_events", "present", "limit", "features", "shadows", "far_terrain"};
+            "mod_events", "present", "limit", "features", "shadows", "far_terrain", "light"};
     private static final String[] ENGLISH = {"client ticks", "packets and tasks", "finding what is in view", "particles, handed in",
             "gathering what to draw", "sorting what to draw", "drawing the terrain", "building chunk meshes", "HUD and screens",
-            "mods' frame events", "showing the frame", "frame-rate limit", "drawing the handed-in parts", "shader shadows", "Distant Horizons"};
+            "mods' frame events", "showing the frame", "frame-rate limit", "drawing the handed-in parts", "shader shadows", "Distant Horizons", "light updates"};
     private static final String[] ABOUT = {"mobs and sounds moving between frames", "the server's packets and queued tasks",
             "the world's blocks, sky and weather in view", "all of them handed in, and the rarer kinds made ready",
             "the world's other parts, handed in", "the handed-in parts put in order (the things' shares are with them)",
@@ -22,7 +22,7 @@ public final class FramePhase {
             "other mods' code run every frame", "waiting for the GPU or the screen, and the frame's upkeep", "waiting, as the frame-rate limit asks",
             "the sorted parts sent to the GPU (the things' shares are with them)",
             "Iris drawing the world again from the sun for the shader pack (the things' shadows are with them)",
-            "its far terrain drawn, and faded into the game's"};
+            "its far terrain drawn, and faded into the game's", "the world's light worked out again where blocks changed"};
 
     private FramePhase() {}
 

@@ -202,6 +202,8 @@
   "culprit.frame.shadows": "Shader shadows",
   "culprit.frame.far_terrain": "Distant Horizons",
   "culprit.frame.about.far_terrain": "its far terrain drawn, and faded into the game's",
+  "culprit.frame.light": "Light updates",
+  "culprit.frame.about.light": "the world's light worked out again where blocks changed",
   "culprit.frame.about.shadows": "Iris drawing the world again from the sun for the shader pack (the things' shadows are with them)",
   "culprit.chunks.reason.players": "players",
   "culprit.chunks.reason.mods": "mods",
