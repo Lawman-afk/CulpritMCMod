@@ -50,7 +50,7 @@ tasks.named('jar', Jar) {
     exclude('dev/culprit/devworld/**', 'dev/culprit/gametest/**', 'data/culprit/structure/gametest/**')
 }
 
-// Mojang ships Java 25 to players in 26.3, so the mod targets Java 25.
+// Mojang ships Java 25 to players in 26.1.2, so the mod targets Java 25.
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 // The photographers' window, width x height: -PshotSize=1920x1080 for the mod page's gallery pictures.
