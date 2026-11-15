@@ -103,23 +103,40 @@ def cube_faces(cx, cy, s, colours, gap: float = 0.0) -> Image.Image:
     return layer
 
 
-def cube_lines(cx, cy, s, colour, width: float) -> Image.Image:
-    """The box as clean lines with round joins: its outline and the three edges meeting at the near corner."""
+def cube_lines_mask(cx, cy, s, width: float, top_face: bool = False) -> Image.Image:
+    """The box as clean lines with round joins (its outline and the three edges meeting at the near corner); with
+    `top_face` its top filled as well."""
     top, ur, lr, bottom, ll, ul, mid = cube_points(cx, cy, s)
     mask = Image.new("L", (M, M), 0)
     dr = ImageDraw.Draw(mask)
+    if top_face:
+        dr.polygon([(px(p[0]), px(p[1])) for p in (top, ur, mid, ul)], fill=255)
     w = round(px(width))
     for a, b in ((top, ur), (ur, lr), (lr, bottom), (bottom, ll), (ll, ul), (ul, top), (mid, ul), (mid, ur), (mid, bottom)):
         dr.line((px(a[0]), px(a[1]), px(b[0]), px(b[1])), fill=255, width=w)
     for p in (top, ur, lr, bottom, ll, ul, mid):
         disc(dr, p[0], p[1], width / 2)
-    return solid(colour, mask)
+    return mask
 
 
-def heat_fill(mask: Image.Image) -> Image.Image:
-    """The cost scale across a shape, pale yellow at its bottom left to deep magenta at its top right."""
+def cube_lines(cx, cy, s, colour, width: float, top_face: bool = False) -> Image.Image:
+    return solid(colour, cube_lines_mask(cx, cy, s, width, top_face))
+
+
+def heat_fill(mask: Image.Image, mode: str = "diagonal", r: float = R) -> Image.Image:
+    """The cost scale across a shape: "diagonal", pale yellow at the bottom left to deep magenta at the top right (over
+    the lens); "radial", pale yellow in the lens's middle to deep magenta at radius r; "radial_in", the other way;
+    "vertical", pale yellow at the bottom to deep magenta at the top."""
     xs, ys = np.meshgrid(np.linspace(0, 1, M // 4), np.linspace(0, 1, M // 4))
-    t = np.clip(((xs - (C[0] - R)) + ((C[1] + R) - ys)) / (4 * R), 0, 1)
+    if mode == "radial":
+        t = np.hypot(xs - C[0], ys - C[1]) / r
+    elif mode == "radial_in":
+        t = 1 - np.hypot(xs - C[0], ys - C[1]) / r
+    elif mode == "vertical":
+        t = ((C[1] + r) - ys) / (2 * r)
+    else:
+        t = ((xs - (C[0] - r)) + ((C[1] + r) - ys)) / (4 * r)
+    t = np.clip(t, 0, 1)
     rgb = np.zeros(t.shape + (3,))
     for i in range(3):
         stops = np.array([c[i] for c in S.HEAT], float)
@@ -129,16 +146,39 @@ def heat_fill(mask: Image.Image) -> Image.Image:
     return img
 
 
-def glass(ring_colour, handle_colour, lens_colour=None, lens_layer=None, marks=False) -> Image.Image:
-    layer = Image.new("RGBA", (M, M), (0, 0, 0, 0))
+def lens_mask() -> Image.Image:
     inner = Image.new("L", (M, M), 0)
     disc(ImageDraw.Draw(inner), *C, R - T + 0.002)
+    return inner
+
+
+def glow(colour, radius: float, strength: float) -> Image.Image:
+    """A soft light in the lens's middle, fading out by `radius`, kept inside the lens."""
+    xs, ys = np.meshgrid(np.linspace(0, 1, M // 4), np.linspace(0, 1, M // 4))
+    a = np.exp(-(np.hypot(xs - C[0], ys - C[1]) / radius) ** 2) * strength
+    alpha = Image.fromarray(np.uint8(np.clip(a, 0, 1) * 255 + 0.5), "L").resize((M, M), Image.BICUBIC)
+    alpha = ImageChops.multiply(alpha, lens_mask())
+    layer = Image.new("RGBA", (M, M), colour + (255,))
+    layer.putalpha(alpha)
+    return layer
+
+
+def glass(ring_colour, handle_colour, lens_colour=None, lens_layer=None, marks=False, ring_layer=None,
+          ring_t: float = T) -> Image.Image:
+    layer = Image.new("RGBA", (M, M), (0, 0, 0, 0))
+    inner = Image.new("L", (M, M), 0)
+    disc(ImageDraw.Draw(inner), *C, R - ring_t + 0.002)
     if lens_layer is not None:
         layer.alpha_composite(lens_layer)
     elif lens_colour is not None:
         layer.alpha_composite(solid(lens_colour, inner))
     layer.alpha_composite(solid(handle_colour, handle_mask()))
-    layer.alpha_composite(solid(ring_colour, ring_mask(R, R - T)))
+    if ring_layer is not None:
+        ring = ring_layer.copy()
+        ring.putalpha(ImageChops.multiply(ring.getchannel("A"), ring_mask(R, R - ring_t)))
+        layer.alpha_composite(ring)
+    else:
+        layer.alpha_composite(solid(ring_colour, ring_mask(R, R - ring_t)))
     if marks:
         # Sight marks: four short ticks inward from the ring, at the top, bottom, left and right.
         mask = Image.new("L", (M, M), 0)
@@ -203,18 +243,64 @@ def examples() -> dict:
     return out
 
 
+def more_examples() -> dict:
+    """The second round, round the two the user liked best ("I really like line and hot"): the first two again to
+    compare, then their variations."""
+    out = {}
+    lines = 0.024
+    g = glass(WHITE, WHITE, LENS)
+    g.alpha_composite(cube_lines(*C, BOX, WHITE, lines))
+    out["line (first)"] = compose(ground_flat(), g)
+    g = glass(WHITE, WHITE, lens_layer=heat_fill(lens_mask()))
+    g.alpha_composite(cube_lines(*C, BOX, WHITE, lines))
+    out["hot (first)"] = compose(ground_flat(), g)
+
+    # Hot: the scale lit from the lens's middle out to its rim.
+    g = glass(WHITE, WHITE, lens_layer=heat_fill(lens_mask(), "radial", R - T))
+    g.alpha_composite(cube_lines(*C, BOX, WHITE, lines))
+    out["hot radial"] = compose(ground_flat(), g)
+    # Hot: the scale rising from the bottom of the lens to its top, the box's lines in the dark of the ground.
+    g = glass(WHITE, WHITE, lens_layer=heat_fill(lens_mask(), "vertical", R - T))
+    g.alpha_composite(cube_lines(*C, BOX, (24, 27, 36), lines))
+    out["hot rising, dark box"] = compose(ground_flat(), g)
+    # Hot: the box's top filled white, its sides as lines, for a little depth.
+    g = glass(WHITE, WHITE, lens_layer=heat_fill(lens_mask()))
+    g.alpha_composite(cube_lines(*C, BOX, WHITE, lines, top_face=True))
+    out["hot, solid top"] = compose(ground_flat(), g)
+    # Line and hot together: the ring in the scale, the lens dark, the box white.
+    g = glass(WHITE, WHITE, LENS, ring_layer=heat_fill(Image.new("L", (M, M), 255)))
+    g.alpha_composite(cube_lines(*C, BOX, WHITE, lines))
+    out["hot ring"] = compose(ground_flat(), g)
+    # Line: the box's lines in the scale, the rest white on the dark.
+    g = glass(WHITE, WHITE, LENS)
+    g.alpha_composite(heat_fill(cube_lines_mask(*C, BOX, lines), "diagonal", BOX * 1.1))
+    out["line, hot box"] = compose(ground_flat(), g)
+    # Line: the dark lens lit by the box from inside, as a culprit glows on the world.
+    g = glass(WHITE, WHITE, LENS)
+    g.alpha_composite(glow(S.HEAT[4], 0.16, 0.85))
+    g.alpha_composite(cube_lines(*C, BOX, WHITE, lines))
+    out["line, glowing"] = compose(ground_flat(), g)
+    # Line, finer: a thinner ring and box lines, the lens wider.
+    g = glass(WHITE, WHITE, LENS, ring_t=T * 0.7)
+    g.alpha_composite(cube_lines(*C, BOX * 1.08, WHITE, lines * 0.72))
+    out["line, fine"] = compose(ground_flat(), g)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(S.ROOT / "build" / "branding" / "flat"))
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--set", default="first", choices=("first", "more"))
     ap.add_argument("--choose", default=None)
     args = ap.parse_args()
-    out = Path(args.out)
+    out = Path(args.out or S.ROOT / "build" / "branding" / ("flat" if args.set == "first" else "flat_more"))
     out.mkdir(parents=True, exist_ok=True)
-    logos = examples()
+    logos = examples() if args.set == "first" else more_examples()
     for name, logo in logos.items():
-        logo.save(out / f"logo_{name}_1024.png", optimize=True)
-        logo.resize((400, 400), Image.LANCZOS).save(out / f"logo_{name}.png", optimize=True)
-    L.sheet(logos, out.parent / "flat_sheet.png")
+        file = name.replace(" ", "_").replace(",", "").replace("(", "").replace(")", "")
+        logo.save(out / f"logo_{file}_1024.png", optimize=True)
+        logo.resize((400, 400), Image.LANCZOS).save(out / f"logo_{file}.png", optimize=True)
+    L.sheet(logos, out.parent / f"{out.name}_sheet.png")
     if args.choose:
         logos[args.choose].resize((400, 400), Image.LANCZOS).convert("RGB").save(L.LOGO, optimize=True)
         print("chose", args.choose, "as", L.LOGO)
