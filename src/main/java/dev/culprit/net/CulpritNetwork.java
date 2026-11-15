@@ -5,14 +5,14 @@ import dev.culprit.command.ReportText;
 import dev.culprit.scan.ScanReport;
 import dev.culprit.scan.TickScan;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import dev.culprit.legacy.net.StreamCodec;
+import dev.culprit.legacy.net.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.network.PacketDistributor;
-import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
-import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+import net.minecraftforge.eventbus.api.IEventBus;
+import dev.culprit.legacy.net.PacketDistributor;
+import dev.culprit.legacy.net.RegisterPayloadHandlersEvent;
+import dev.culprit.legacy.net.IPayloadContext;
+import dev.culprit.legacy.net.PayloadRegistrar;
 
 /**
  * The payloads between Culprit's server side and a player's client (DESIGN §5.4). All are optional: a server without
@@ -135,7 +135,7 @@ public final class CulpritNetwork {
         registrar.playToServer(ChunksRequest.TYPE, ChunksRequest.CODEC, CulpritNetwork::chunksRequest);
         registrar.playToClient(ChunksReport.TYPE, ChunksReport.CODEC, dev.culprit.port.net.RegisterClientPayloadHandlersEvent.handler(ChunksReport.TYPE));
         registrar.playToServer(LoadRequest.TYPE, LoadRequest.CODEC, (request, context) -> {
-            if (context.player() instanceof ServerPlayer player) {
+            if (((Object) context.player()) instanceof ServerPlayer player) {
                 LoadSender.asked(player, request.on());
             }
         });
@@ -148,7 +148,7 @@ public final class CulpritNetwork {
     }
 
     private static void scanRequest(ScanRequest request, IPayloadContext context) {
-        if (!(context.player() instanceof ServerPlayer player)) {
+        if (!(((Object) context.player()) instanceof ServerPlayer player)) {
             return;
         }
         if (!mayScan(player)) {
@@ -164,7 +164,7 @@ public final class CulpritNetwork {
             status(player, TickScan.stopNow(true) ? Status.STOPPED : Status.NOT_RUNNING, 0);
             return;
         }
-        int seconds = Math.clamp(request.seconds(), 5, dev.culprit.config.CulpritServerConfig.maxSeconds());
+        int seconds = dev.culprit.legacy.J21.clamp(request.seconds(), 5, dev.culprit.config.CulpritServerConfig.maxSeconds());
         int left = TickScan.ticksLeft();
         if (left >= 0) {
             status(player, Status.BUSY, left);
@@ -176,14 +176,14 @@ public final class CulpritNetwork {
     }
 
     private static void chunksRequest(ChunksRequest request, IPayloadContext context) {
-        if (!(context.player() instanceof ServerPlayer player)) {
+        if (!(((Object) context.player()) instanceof ServerPlayer player)) {
             return;
         }
         if (!mayScan(player)) {
             status(player, Status.DENIED, 0);
             return;
         }
-        if (player.connection.hasChannel(ChunksReport.TYPE)) {
+        if (dev.culprit.legacy.net.Network.clientHas(player.connection)) {
             PacketDistributor.sendToPlayer(player, new ChunksReport(dev.culprit.chunks.ChunkCensus.take(player.level().getServer())));
         }
     }
@@ -199,7 +199,7 @@ public final class CulpritNetwork {
 
     /** Sends a report to a player whose client has Culprit; false if it has not (it gets the text instead). */
     public static boolean sendReport(ServerPlayer player, ScanReport report) {
-        if (!player.connection.hasChannel(Report.TYPE)) {
+        if (!dev.culprit.legacy.net.Network.clientHas(player.connection)) {
             return false;
         }
         PacketDistributor.sendToPlayer(player, new Report(ReportData.of(report)));
@@ -207,7 +207,7 @@ public final class CulpritNetwork {
     }
 
     private static void status(ServerPlayer player, byte state, int ticks) {
-        if (player.connection.hasChannel(Status.TYPE)) {
+        if (dev.culprit.legacy.net.Network.clientHas(player.connection)) {
             PacketDistributor.sendToPlayer(player, new Status(state, ticks));
         }
     }

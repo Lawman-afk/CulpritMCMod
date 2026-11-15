@@ -62,13 +62,15 @@ abstract class MinecraftServerMixin {
     }
 
     @WrapOperation(method = "tickChildren", at = @At(value = "INVOKE",
-            target = "Lnet/neoforged/neoforge/event/EventHooks;fireLevelTickPre(Lnet/minecraft/world/level/Level;Ljava/util/function/BooleanSupplier;)V"))
+            target = "Lnet/minecraftforge/event/ForgeEventFactory;onPreLevelTick(Lnet/minecraft/world/level/Level;Ljava/util/function/BooleanSupplier;)V",
+            remap = false))
     private void culprit$timeLevelTickPre(Level level, BooleanSupplier haveTime, Operation<Void> original) {
         culprit$levelEvents(level, haveTime, original);
     }
 
     @WrapOperation(method = "tickChildren", at = @At(value = "INVOKE",
-            target = "Lnet/neoforged/neoforge/event/EventHooks;fireLevelTickPost(Lnet/minecraft/world/level/Level;Ljava/util/function/BooleanSupplier;)V"))
+            target = "Lnet/minecraftforge/event/ForgeEventFactory;onPostLevelTick(Lnet/minecraft/world/level/Level;Ljava/util/function/BooleanSupplier;)V",
+            remap = false))
     private void culprit$timeLevelTickPost(Level level, BooleanSupplier haveTime, Operation<Void> original) {
         culprit$levelEvents(level, haveTime, original);
     }

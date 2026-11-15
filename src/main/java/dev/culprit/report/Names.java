@@ -43,7 +43,7 @@ public final class Names {
         String key = "mod|" + id;
         String name = CACHE.get(key);
         if (name == null) {
-            name = net.neoforged.fml.ModList.get().getModContainerById(id).map(c -> c.getModInfo().getDisplayName()).orElse(id);
+            name = net.minecraftforge.fml.ModList.get().getModContainerById(id).map(c -> c.getModInfo().getDisplayName()).orElse(id);
             CACHE.put(key, name);
         }
         return name;
@@ -64,8 +64,8 @@ public final class Names {
             if (kind == Kind.BLOCK_ENTITY && BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(id)) {
                 // Its own block's name when it has one by the same id (a hopper's), else the first block it sits in.
                 BlockEntityType<?> blockEntity = BuiltInRegistries.BLOCK_ENTITY_TYPE.get(id);
-                if (!BuiltInRegistries.BLOCK.containsKey(id) && blockEntity != null && !blockEntity.getValidBlocks().isEmpty()) {
-                    return blockEntity.getValidBlocks().stream().min(java.util.Comparator.comparing(b -> BuiltInRegistries.BLOCK.getKey(b).toString()))
+                if (!BuiltInRegistries.BLOCK.containsKey(id) && blockEntity != null && !((dev.culprit.legacy.mixin.BlockEntityTypeAccessor) blockEntity).culprit$validBlocks().isEmpty()) {
+                    return ((dev.culprit.legacy.mixin.BlockEntityTypeAccessor) blockEntity).culprit$validBlocks().stream().min(java.util.Comparator.comparing(b -> BuiltInRegistries.BLOCK.getKey(b).toString()))
                             .map(b -> b.getName().getString()).orElse(pretty(type));
                 }
             }

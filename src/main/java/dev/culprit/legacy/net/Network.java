@@ -1,0 +1,150 @@
+package dev.culprit.legacy.net;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
+
+import org.jspecify.annotations.Nullable;
+
+import dev.culprit.Culprit;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.simple.SimpleChannel;
+
+/**
+ * The mod's one Forge channel, carrying every payload the mod registers (NeoForge gives each its own): a payload goes as
+ * its type's id and then its own codec's bytes, and its handler runs on the receiving side's main thread, as NeoForge's
+ * handlers do.
+ */
+public final class Network {
+    private Network() {}
+
+    enum Direction {
+        TO_CLIENT, TO_SERVER, BOTH
+    }
+
+    private record Entry<T extends CustomPacketPayload>(CustomPacketPayload.Type<T> type, StreamCodec<? super FriendlyByteBuf, T> codec,
+            IPayloadHandler<T> handler, Direction direction) {
+    }
+
+    /** One message on the channel: any payload. */
+    record Wrapped(CustomPacketPayload payload) {
+    }
+
+    private static final Map<ResourceLocation, Entry<?>> BY_ID = new ConcurrentHashMap<>();
+    private static @Nullable SimpleChannel channel;
+    /**
+     * The mod's payload protocol: every version its registrars were asked for, in turn (CulpritNetwork's), so a client and
+     * a server that differ in any of them are told apart, as NeoForge's would be.
+     */
+    private static final java.util.Set<String> VERSIONS = new java.util.LinkedHashSet<>();
+    private static String version = "1";
+    /** The client's own player (set on the client only, so this class never names a client class). */
+    public static Supplier<@Nullable Player> clientPlayer = () -> null;
+
+    static <T extends CustomPacketPayload> void register(CustomPacketPayload.Type<T> type, StreamCodec<? super FriendlyByteBuf, T> codec,
+            IPayloadHandler<T> handler, Direction direction) {
+        BY_ID.put(type.id(), new Entry<>(type, codec, handler, direction));
+    }
+
+    /** A payload of this branch's own (not the mod's): to the client. */
+    public static <T extends CustomPacketPayload> void playToClient(CustomPacketPayload.Type<T> type, StreamCodec<? super FriendlyByteBuf, T> codec,
+            IPayloadHandler<T> handler) {
+        register(type, codec, handler, Direction.TO_CLIENT);
+    }
+
+    static synchronized void version(String v) {
+        VERSIONS.add(v);
+        version = String.join("+", VERSIONS);
+    }
+
+    public static String version() {
+        return version;
+    }
+
+    /**
+     * Makes the channel (once the payloads are registered: {@link dev.culprit.legacy.Lifecycle}). Either side may lack the
+     * mod, as NeoForge's optional payloads allow (Culprit's frame scan needs no server side, and a server with Culprit
+     * takes players without it): only a different version is refused.
+     */
+    public static void open(String version) {
+        if (channel != null) {
+            return;
+        }
+        SimpleChannel c = NetworkRegistry.newSimpleChannel(new ResourceLocation(Culprit.MODID, "main"), () -> version,
+                NetworkRegistry.acceptMissingOr(version), NetworkRegistry.acceptMissingOr(version));
+        c.messageBuilder(Wrapped.class, 0).encoder(Network::encode).decoder(Network::decode).consumerMainThread(Network::handle).add();
+        channel = c;
+    }
+
+    /** Whether the other end of a connection has the mod's channel (NeoForge's {@code hasChannel}). */
+    public static boolean remotePresent(net.minecraft.network.@Nullable Connection connection) {
+        return connection != null && channel != null && channel.isRemotePresent(connection);
+    }
+
+    /** NeoForge's {@code hasChannel} on a player's connection, on the server: whether their client has Culprit. */
+    public static boolean clientHas(net.minecraft.server.network.@Nullable ServerGamePacketListenerImpl connection) {
+        return connection != null && remotePresent(connection.connection);
+    }
+
+    static SimpleChannel channel() {
+        if (channel == null) {
+            throw new IllegalStateException("The mod's network channel is not open yet");
+        }
+        return channel;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends CustomPacketPayload> void encode(Wrapped message, FriendlyByteBuf buf) {
+        T payload = (T) message.payload();
+        Entry<T> entry = (Entry<T>) BY_ID.get(payload.type().id());
+        if (entry == null) {
+            throw new IllegalStateException("Payload not registered: " + payload.type().id());
+        }
+        buf.writeResourceLocation(entry.type().id());
+        entry.codec().encode(buf, payload);
+    }
+
+    private static Wrapped decode(FriendlyByteBuf buf) {
+        ResourceLocation id = buf.readResourceLocation();
+        Entry<?> entry = BY_ID.get(id);
+        if (entry == null) {
+            throw new IllegalStateException("Payload not registered: " + id);
+        }
+        return new Wrapped(entry.codec().decode(buf));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends CustomPacketPayload> void handle(Wrapped message, Supplier<NetworkEvent.Context> supplier) {
+        NetworkEvent.Context ctx = supplier.get();
+        T payload = (T) message.payload();
+        Entry<T> entry = (Entry<T>) BY_ID.get(payload.type().id());
+        if (entry == null) {
+            return;
+        }
+        boolean toServer = ctx.getDirection().getReceptionSide().isServer();
+        if (entry.direction() == (toServer ? Direction.TO_CLIENT : Direction.TO_SERVER)) {
+            Culprit.LOGGER.warn("Payload {} came the wrong way", payload.type().id());
+            return;
+        }
+        IPayloadContext context = new IPayloadContext() {
+            @Override
+            public Player player() {
+                return toServer ? ctx.getSender() : clientPlayer.get();
+            }
+
+            @Override
+            public void reply(CustomPacketPayload reply) {
+                channel().reply(new Wrapped(reply), ctx);
+            }
+        };
+        try {
+            entry.handler().handle(payload, context);
+        } catch (RuntimeException e) {
+            Culprit.LOGGER.error("Payload {} failed", payload.type().id(), e);
+        }
+    }
+}

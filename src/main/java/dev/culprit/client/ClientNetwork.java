@@ -1,7 +1,7 @@
 package dev.culprit.client;
 
 import dev.culprit.net.CulpritNetwork;
-import net.neoforged.bus.api.IEventBus;
+import net.minecraftforge.eventbus.api.IEventBus;
 import dev.culprit.port.net.RegisterClientPayloadHandlersEvent;
 
 /** The client's handlers for the server's payloads ({@link CulpritNetwork}), kept apart so no client class loads on a server. */

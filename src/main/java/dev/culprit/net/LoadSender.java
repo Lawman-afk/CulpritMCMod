@@ -7,11 +7,11 @@ import java.util.UUID;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.server.ServerStoppedEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.event.TickEvent;
+import dev.culprit.legacy.net.PacketDistributor;
 
 /**
  * The HUD line's numbers for players on a server (DESIGN §4.5): the server's average time a tick and ticks a second,
@@ -24,9 +24,9 @@ public final class LoadSender {
     private LoadSender() {}
 
     public static void register() {
-        NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post e) -> tick(e.getServer()));
-        NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent e) -> ASKED.remove(e.getEntity().getUUID()));
-        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent e) -> ASKED.clear());
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ServerTickEvent e) -> { if (e.phase != net.minecraftforge.event.TickEvent.Phase.END) return; tick(e.getServer()); });
+        MinecraftForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent e) -> ASKED.remove(e.getEntity().getUUID()));
+        MinecraftForge.EVENT_BUS.addListener((ServerStoppedEvent e) -> ASKED.clear());
     }
 
     static void asked(ServerPlayer player, boolean on) {
@@ -41,8 +41,8 @@ public final class LoadSender {
         if (ASKED.isEmpty() || server.getTickCount() % 20 != 0) {
             return;
         }
-        long ns = server.getAverageTickTimeNanos();
-        float tps = (float) Math.min(server.tickRateManager().tickrate(), ns > 0 ? 1e9 / ns : 20);
+        long ns = (long) (server.getAverageTickTime() * 1_000_000L);
+        float tps = (float) Math.min(20f, ns > 0 ? 1e9 / ns : 20);
         for (Iterator<UUID> it = ASKED.iterator(); it.hasNext(); ) {
             ServerPlayer player = server.getPlayerList().getPlayer(it.next());
             if (player == null || !CulpritNetwork.mayScan(player)) {

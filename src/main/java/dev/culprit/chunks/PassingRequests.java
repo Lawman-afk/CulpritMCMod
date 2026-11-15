@@ -52,7 +52,7 @@ public final class PassingRequests {
 
     private static boolean wayThrough(String name) {
         return name.startsWith("net.minecraft.server.level.") || name.startsWith("net.minecraft.util.thread.")
-                || name.startsWith("net.neoforged.neoforge.common.extensions.") || WAY_THROUGH.contains(name);
+                || name.startsWith("net.minecraftforge.common.extensions.") || WAY_THROUGH.contains(name);
     }
 
     /** Who asked for a chunk that is loaded now, or null when no one was noted. */

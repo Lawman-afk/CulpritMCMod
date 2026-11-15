@@ -23,7 +23,7 @@ public final class PortMixinPlugin implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         try {
-            return !net.neoforged.fml.loading.FMLLoader.isProduction();
+            return !net.minecraftforge.fml.loading.FMLLoader.isProduction();
         } catch (RuntimeException | LinkageError e) {
             return false;
         }

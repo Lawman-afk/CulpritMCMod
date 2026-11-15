@@ -17,8 +17,8 @@ public final class CulpritMixinPlugin implements IMixinConfigPlugin {
      * The hooks into other mods (DESIGN §6), each applied only when that mod is installed: without it, the game would
      * still start (they are optional) but log a warning for each class it looked for.
      */
-    private static final java.util.Map<String, String> NEEDS = java.util.Map.of("SodiumFrameMixin", "sodium", "SodiumChunksFrameMixin", "sodium",
-            "IrisShadowFrameMixin", "iris", "DistantHorizonsFrameMixin", "distanthorizons");
+    private static final java.util.Map<String, String> NEEDS = java.util.Map.of("SodiumFrameMixin", "embeddium", "SodiumChunksFrameMixin", "embeddium",
+            "IrisShadowFrameMixin", "oculus", "DistantHorizonsFrameMixin", "distanthorizons");
 
     @Override
     public void onLoad(String mixinPackage) {}
@@ -39,7 +39,7 @@ public final class CulpritMixinPlugin implements IMixinConfigPlugin {
 
     private static boolean installed(String modId) {
         try {
-            var mods = net.neoforged.fml.loading.LoadingModList.get();
+            var mods = net.minecraftforge.fml.loading.LoadingModList.get();
             return mods == null || mods.getModFileById(modId) != null;
         } catch (RuntimeException | LinkageError e) {
             return true;                                        // (cannot tell: the optional hook looks for itself)

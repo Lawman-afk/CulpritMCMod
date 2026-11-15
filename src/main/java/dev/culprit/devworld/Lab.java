@@ -57,11 +57,11 @@ import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.TickEvent;
+import dev.culprit.legacy.net.PacketDistributor;
 
 /**
  * Development aid, left out of the released jar (build.gradle's jar task; found by its annotation, so nothing in the
@@ -93,7 +93,7 @@ public final class Lab {
     private Lab() {}
 
     @SubscribeEvent
-    public static void tick(ClientTickEvent.Post event) {
+    public static void tick(net.minecraftforge.event.TickEvent.ClientTickEvent event) { if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
         if (!ENABLED) {
             return;
         }
@@ -110,8 +110,7 @@ public final class Lab {
             try {
                 var settings = new LevelSettings("Culprit Lab", GameType.CREATIVE, false, net.minecraft.world.Difficulty.NORMAL, true,
                         new net.minecraft.world.level.GameRules(), WorldDataConfiguration.DEFAULT);
-                mc.createWorldOpenFlows().createFreshLevel(fresh(mc, "culprit_lab"), settings, new WorldOptions(0L, false, false), Lab::flat,
-                        mc.screen);
+                mc.createWorldOpenFlows().createFreshLevel(fresh(mc, "culprit_lab"), settings, new WorldOptions(0L, false, false), Lab::flat);
             } catch (IOException e) {
                 Culprit.LOGGER.error("Lab: could not make a world", e);
             }
@@ -152,8 +151,8 @@ public final class Lab {
             framesChecked = true;
             StringBuilder never = new StringBuilder();
             for (int p = 0; p < Math.min(dev.culprit.scan.FramePhase.COUNT, frames.phaseNs.length); p++) {
-                if (frames.phaseNs[p] == 0 && (p != dev.culprit.scan.FramePhase.SHADOWS || net.neoforged.fml.ModList.get().isLoaded("iris"))
-                        && (p != dev.culprit.scan.FramePhase.FAR_TERRAIN || net.neoforged.fml.ModList.get().isLoaded("distanthorizons"))) {
+                if (frames.phaseNs[p] == 0 && (p != dev.culprit.scan.FramePhase.SHADOWS || net.minecraftforge.fml.ModList.get().isLoaded("oculus"))
+                        && (p != dev.culprit.scan.FramePhase.FAR_TERRAIN || net.minecraftforge.fml.ModList.get().isLoaded("distanthorizons"))) {
                     never.append(' ').append(dev.culprit.scan.FramePhase.key(p));
                 }
             }
@@ -203,7 +202,7 @@ public final class Lab {
                 if (!(mc.screen instanceof CulpritScreen)) {
                     mc.setScreen(new CulpritScreen());
                 }
-                if (mc.screen instanceof CulpritScreen screen) {
+                if (((Object) mc.screen) instanceof CulpritScreen screen) {
                     screen.setSearch(v.search());
                 }
             } else if (v.screenTab() == SCAN_MENU) {
@@ -219,13 +218,13 @@ public final class Lab {
             } else if (mc.screen != null) {
                 mc.setScreen(null);
             }
-            server.execute(() -> server.getPlayerList().getPlayers().getFirst()
+            server.execute(() -> dev.culprit.legacy.J21.first(server.getPlayerList().getPlayers())
                     .teleportTo(server.overworld(), v.at().x, v.at().y, v.at().z, v.yaw(), v.pitch()));
             return;
         }
         if (step - 1 == views.size()) {
             mc.setScreen(null);
-            server.execute(() -> server.getPlayerList().getPlayers().getFirst()
+            server.execute(() -> dev.culprit.legacy.J21.first(server.getPlayerList().getPlayers())
                     .teleportTo(server.overworld(), spawn.x, spawn.y, spawn.z, 180f, 10f));
             return;
         }
@@ -275,7 +274,7 @@ public final class Lab {
             }
             BlockPos top = new BlockPos(x, y + 6, 8);
             level.setBlock(top, Blocks.CHEST.defaultBlockState(), 3);
-            if (level.getBlockEntity(top) instanceof Container chest) {
+            if (((Object) level.getBlockEntity(top)) instanceof Container chest) {
                 for (int s = 0; s < chest.getContainerSize(); s++) {
                     chest.setItem(s, new ItemStack(Items.COBBLESTONE, 64));
                 }
@@ -353,7 +352,7 @@ public final class Lab {
             BlockPos at = new BlockPos(17 + k, y, 0);
             level.setBlock(at, (k == 0 ? Blocks.REPEATING_COMMAND_BLOCK : Blocks.CHAIN_COMMAND_BLOCK).defaultBlockState()
                     .setValue(CommandBlock.FACING, Direction.EAST), 3);
-            if (level.getBlockEntity(at) instanceof CommandBlockEntity block) {
+            if (((Object) level.getBlockEntity(at)) instanceof CommandBlockEntity block) {
                 block.getCommandBlock().setCommand(clock.get(k));
                 block.setAutomatic(true);
                 block.setChanged();
@@ -373,7 +372,7 @@ public final class Lab {
         sign(level, new BlockPos(2, y, 3), List.of("Or type", "/culprit scan", "then /culprit", "top things"));
         commands.performPrefixedCommand(source, "setworldspawn 1 " + y + " 2");
         spawn = new Vec3(1.5, y, 2.5);
-        ServerPlayer player = level.getServer().getPlayerList().getPlayers().getFirst();
+        ServerPlayer player = dev.culprit.legacy.J21.first(level.getServer().getPlayerList().getPlayers());
         player.setGameMode(GameType.CREATIVE);
         player.getAbilities().flying = true;                       // (else the camera falls between the views)
         player.onUpdateAbilities();
@@ -428,7 +427,7 @@ public final class Lab {
     /** A standing oak sign facing south (toward the spawn's side), four lines on its front. */
     private static void sign(ServerLevel level, BlockPos at, List<String> lines) {
         level.setBlock(at, Blocks.OAK_SIGN.defaultBlockState().setValue(StandingSignBlock.ROTATION, 0), 3);
-        if (level.getBlockEntity(at) instanceof SignBlockEntity sign) {
+        if (((Object) level.getBlockEntity(at)) instanceof SignBlockEntity sign) {
             SignText text = sign.getText(true);
             for (int i = 0; i < Math.min(4, lines.size()); i++) {
                 text = text.setMessage(i, Component.literal(lines.get(i)));

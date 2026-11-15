@@ -106,7 +106,7 @@ final class ChunksPanel {
         }
         List<Group> out = new ArrayList<>();
         for (List<Integer> same : bySame.values()) {
-            int first = same.getFirst(), chunks = 0;
+            int first = dev.culprit.legacy.J21.first(same), chunks = 0;
             if (same.size() == 1) {
                 chunks = reached[first];
             } else {
@@ -238,7 +238,7 @@ final class ChunksPanel {
         g.text(font, Component.translatableWithFallback("culprit.chunks.col.chunks", "Chunks"), countX - 8, y, HEAD);
         List<Group> shown = shown();
         int rows = Math.max(1, (y1 - y0 - ROW) / ROW);
-        scroll = Math.clamp(scroll, 0, Math.max(0, shown.size() - rows));
+        scroll = dev.culprit.legacy.J21.clamp(scroll, 0, Math.max(0, shown.size() - rows));
         for (int r = 0; r < rows && scroll + r < shown.size(); r++) {
             Group group = shown.get(scroll + r);
             int ry = y0 + ROW + 2 + r * ROW;

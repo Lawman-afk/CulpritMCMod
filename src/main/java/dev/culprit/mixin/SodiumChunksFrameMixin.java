@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * meshes", as the game's are. Applies only with Sodium, and leaves that part unmeasured where it cannot.
  */
 @Pseudo
-@Mixin(targets = "net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager", remap = false)
+@Mixin(targets = "me.jellysquid.mods.sodium.client.render.chunk.RenderSectionManager", remap = false)
 abstract class SodiumChunksFrameMixin {
     @Unique
     private static boolean culprit$updating, culprit$taking;

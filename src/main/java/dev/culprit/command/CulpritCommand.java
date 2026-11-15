@@ -10,8 +10,8 @@ import dev.culprit.scan.TickScan;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegisterCommandsEvent;
 
 /**
  * {@code /culprit scan [seconds]}, {@code /culprit stop}, {@code /culprit top [things|types|mods|chunks] [count]}:
@@ -24,7 +24,7 @@ public final class CulpritCommand {
     private CulpritCommand() {}
 
     public static void register() {
-        NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent e) -> commands(e.getDispatcher()));
+        MinecraftForge.EVENT_BUS.addListener((RegisterCommandsEvent e) -> commands(e.getDispatcher()));
     }
 
     private static void commands(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -58,8 +58,8 @@ public final class CulpritCommand {
             return 0;
         }
         try {
-            java.nio.file.Path file = dev.culprit.report.ReportFile.write(dev.culprit.net.ReportData.of(r), source.getServer().getServerDirectory());
-            java.nio.file.Path shown = source.getServer().getServerDirectory().relativize(file);
+            java.nio.file.Path file = dev.culprit.report.ReportFile.write(dev.culprit.net.ReportData.of(r), source.getServer().getServerDirectory().toPath());
+            java.nio.file.Path shown = source.getServer().getServerDirectory().toPath().relativize(file);
             source.sendSuccess(() -> ReportText.tr("export.saved", "Saved the report: %s (and the same as .json).", shown.toString()), false);
             return 1;
         } catch (java.io.IOException | RuntimeException e) {

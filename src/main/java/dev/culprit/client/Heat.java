@@ -16,12 +16,12 @@ public final class Heat {
     /** 0 to 1 for a cost per tick (or per frame), from 1 µs or less to {@link #TOP_US} or more. */
     public static float of(long nsPerTick) {
         double us = Math.max(nsPerTick / 1000.0, 1.0);
-        return (float) Math.clamp(Math.log10(us) / Math.log10(TOP_US), 0.0, 1.0);
+        return (float) dev.culprit.legacy.J21.clamp(Math.log10(us) / Math.log10(TOP_US), 0.0, 1.0);
     }
 
     /** The scale's colour at {@code t} (0 to 1), as 0xRRGGBB. */
     public static int rgb(float t) {
-        float x = Math.clamp(t, 0f, 1f) * (STOPS.length - 1);
+        float x = dev.culprit.legacy.J21.clamp(t, 0f, 1f) * (STOPS.length - 1);
         int i = Math.min((int) x, STOPS.length - 2);
         float f = x - i;
         int a = STOPS[i];

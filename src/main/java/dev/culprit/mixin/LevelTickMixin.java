@@ -19,7 +19,7 @@ abstract class LevelTickMixin {
     @WrapOperation(method = "tickBlockEntities",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/block/entity/TickingBlockEntity;tick()V"))
     private void culprit$timeBlockEntity(TickingBlockEntity ticker, Operation<Void> original) {
-        if (!Probe.measuring() || !((Object) this instanceof ServerLevel level)) {
+        if (!Probe.measuring() || !((Object) ((Object) this) instanceof ServerLevel level)) {
             original.call(ticker);
             return;
         }

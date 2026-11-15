@@ -16,11 +16,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * The frame loop, timed during a frame scan (DESIGN §4.2), 1.21.1's way (this branch's own, manual.txt): each frame
- * from its start to its end round {@code runTick}, and its parts outside the world's drawing: the client's ticks, the
- * queued tasks and packets, showing the frame (the screen cleared for it, the frame copied to the window and the
- * window's buffers swapped, where the wait for the GPU and the screen falls) and the frame-rate limit's wait (mods' frame
- * events are timed by listeners, client/FrameEvents). While no frame scan is armed, one boolean read a frame.
+ * The frame loop, timed during a frame scan (DESIGN §4.2), 1.20.1's way (this branch's own, manual.txt; as 1.21.1's):
+ * each frame from its start to its end round {@code runTick}, and its parts outside the world's drawing: the client's
+ * ticks, the queued tasks and packets, showing the frame (the screen cleared for it, the frame copied to the window and
+ * the window's buffers swapped, where the wait for the GPU and the screen falls) and the frame-rate limit's wait (mods'
+ * frame events are timed by listeners, client/FrameEvents). While no frame scan is armed, one boolean read a frame.
  */
 @Mixin(Minecraft.class)
 abstract class MinecraftFrameMixin {

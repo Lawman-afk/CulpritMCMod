@@ -278,7 +278,7 @@ public final class ReportData {
         for (int k = 0; k < Kind.COUNT; k++) {
             d.kindNs[k] = buf.readVarLong();
         }
-        d.phaseNs = new long[Math.clamp(buf.readVarInt(), 0, 64)];
+        d.phaseNs = new long[dev.culprit.legacy.J21.clamp(buf.readVarInt(), 0, 64)];
         for (int p = 0; p < d.phaseNs.length; p++) {
             d.phaseNs[p] = buf.readVarLong();
         }

@@ -4,9 +4,9 @@ import java.util.function.Consumer;
 
 import org.jspecify.annotations.Nullable;
 
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.server.ServerStoppingEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.event.TickEvent;
 
 /**
  * A tick scan: from the start of one server tick to the end of the last, every hooked call is timed (DESIGN §4.1,
@@ -34,9 +34,9 @@ public final class TickScan {
     }
 
     public static void register() {
-        NeoForge.EVENT_BUS.addListener(TickScan::onTickPre);
-        NeoForge.EVENT_BUS.addListener(TickScan::onTickPost);
-        NeoForge.EVENT_BUS.addListener((ServerStoppingEvent e) -> stopNow(false));
+        MinecraftForge.EVENT_BUS.addListener(TickScan::onTickPre);
+        MinecraftForge.EVENT_BUS.addListener(TickScan::onTickPost);
+        MinecraftForge.EVENT_BUS.addListener((ServerStoppingEvent e) -> stopNow(false));
     }
 
     /** Starts a scan of {@code ticks} ticks from the next tick; false if one is already running or about to. */
@@ -79,7 +79,7 @@ public final class TickScan {
         return last;
     }
 
-    private static void onTickPre(ServerTickEvent.Pre event) {
+    private static void onTickPre(net.minecraftforge.event.TickEvent.ServerTickEvent event) { if (event.phase != net.minecraftforge.event.TickEvent.Phase.START) return;
         inTick = true;
         if (pending != null && running == null) {
             running = pending;
@@ -92,7 +92,7 @@ public final class TickScan {
         }
     }
 
-    private static void onTickPost(ServerTickEvent.Post event) {
+    private static void onTickPost(net.minecraftforge.event.TickEvent.ServerTickEvent event) { if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
         inTick = false;
         TickScan scan = running;
         if (scan == null) {
@@ -108,7 +108,7 @@ public final class TickScan {
     }
 
     private void begin() {
-        table = new CostTable(Math.clamp(ticksWanted / 20, 5, 60), Phase.COUNT);   // the slowest 5 % of ticks kept whole, for the spikes
+        table = new CostTable(dev.culprit.legacy.J21.clamp(ticksWanted / 20, 5, 60), Phase.COUNT);   // the slowest 5 % of ticks kept whole, for the spikes
         Probe.table = table;
         Probe.thread = Thread.currentThread();
         Probe.overheadNs = timerCost();

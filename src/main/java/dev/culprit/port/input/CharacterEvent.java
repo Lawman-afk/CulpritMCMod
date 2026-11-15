@@ -6,7 +6,7 @@ import net.minecraft.util.StringUtil;
 public record CharacterEvent(char character, int modifiers) {
     /** Whether the character may go in chat (as 26.x asks of its event). */
     public boolean isAllowedChatCharacter() {
-        return StringUtil.isAllowedChatCharacter(this.character);
+        return net.minecraft.SharedConstants.isAllowedChatCharacter(this.character);
     }
 
     /** The character as a code point, as 26.x's event gives it. */

@@ -199,13 +199,13 @@ final class ScanTests {
                         helper.assertTrue(said.stream().anyMatch(s -> s.contains("Culprit scanned")), "the stopped scan sends its summary: " + said);
                         said.clear();
                         server.getCommands().performPrefixedCommand(source, "culprit top types 3");
-                        helper.assertTrue(said.size() >= 2 && said.getFirst().contains("costliest types"), "/culprit top types prints a header and lines: " + said);
+                        helper.assertTrue(said.size() >= 2 && dev.culprit.legacy.J21.first(said).contains("costliest types"), "/culprit top types prints a header and lines: " + said);
                         // The report as files: a Markdown page naming the hopper among the costliest, and the same as JSON.
                         said.clear();
                         server.getCommands().performPrefixedCommand(source, "culprit export");
-                        helper.assertTrue(!said.isEmpty() && said.getFirst().startsWith("Saved the report: "), "/culprit export says where: " + said);
+                        helper.assertTrue(!said.isEmpty() && dev.culprit.legacy.J21.first(said).startsWith("Saved the report: "), "/culprit export says where: " + said);
                         try {
-                            java.nio.file.Path md = server.getServerDirectory().resolve(said.getFirst().substring("Saved the report: ".length())
+                            java.nio.file.Path md = server.getServerDirectory().toPath().resolve(dev.culprit.legacy.J21.first(said).substring("Saved the report: ".length())
                                     .replace(" (and the same as .json).", ""));
                             String page = java.nio.file.Files.readString(md);
                             String json = java.nio.file.Files.readString(md.resolveSibling(md.getFileName().toString().replace(".md", ".json")));
@@ -231,8 +231,8 @@ final class ScanTests {
         helper.assertFalse(Probe.active, "the hooks are idle once the scan ends");
         BlockPos a = helper.absolutePos(BlockPos.ZERO);
         BlockPos b = helper.absolutePos(new BlockPos(15, 15, 15));
-        BlockPos min = BlockPos.min(a, b);
-        BlockPos max = BlockPos.max(a, b);
+        BlockPos min = dev.culprit.legacy.J21.min(a, b);
+        BlockPos max = dev.culprit.legacy.J21.max(a, b);
         var level = helper.getLevel().dimension();
 
         // Block entities: all 16 hoppers, each where it stands, each every tick.
@@ -355,7 +355,7 @@ final class ScanTests {
                 "the average has the spike ticks in it with every other tick");
         BlockPos a = helper.absolutePos(BlockPos.ZERO);
         BlockPos b = helper.absolutePos(new BlockPos(15, 15, 15));
-        List<ScanReport.Thing> hoppers = s.thingsWithin(helper.getLevel().dimension(), Kind.BLOCK_ENTITY, BlockPos.min(a, b), BlockPos.max(a, b))
+        List<ScanReport.Thing> hoppers = s.thingsWithin(helper.getLevel().dimension(), Kind.BLOCK_ENTITY, dev.culprit.legacy.J21.min(a, b), dev.culprit.legacy.J21.max(a, b))
                 .stream().filter(t -> t.type().equals("minecraft:hopper")).toList();
         helper.assertTrue(hoppers.size() == 16 && hoppers.stream().allMatch(t -> t.calls() == s.ticks),
                 "the hoppers are in every spike tick: " + hoppers.size() + " of them");
@@ -409,7 +409,7 @@ final class ScanTests {
             // The record goes with the level's data: saved and loaded, it is the same.
             ForcedBy record = ForcedBy.TYPE.find(level);
             helper.assertTrue(record != null && record.get(codeKey) != null, "the level keeps a record of who forced what");
-            ForcedBy loaded = ForcedBy.CODEC.parse(NbtOps.INSTANCE, ForcedBy.CODEC.encodeStart(NbtOps.INSTANCE, record).getOrThrow()).getOrThrow();
+            ForcedBy loaded = ForcedBy.CODEC.parse(NbtOps.INSTANCE, ForcedBy.CODEC.encodeStart(NbtOps.INSTANCE, record).getOrThrow(false, error_ -> {})).getOrThrow(false, error_ -> {});
             helper.assertTrue(record.get(codeKey).equals(loaded.get(codeKey)) && record.get(commandKey).equals(loaded.get(commandKey)),
                     "the record saves and loads as it was");
             level.getServer().getCommands().performPrefixedCommand(serverSource(level), "forceload remove " + at.command() * 16 + " " + at.z() * 16);

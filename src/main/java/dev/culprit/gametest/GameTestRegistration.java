@@ -8,11 +8,11 @@ import dev.culprit.Culprit;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.world.level.block.Rotation;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.common.world.chunk.RegisterTicketControllersEvent;
-import net.neoforged.neoforge.common.world.chunk.TicketController;
-import net.neoforged.neoforge.gametest.GameTestHolder;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import dev.culprit.legacy.RegisterTicketControllersEvent;
+import dev.culprit.legacy.TicketController;
+import net.minecraftforge.gametest.GameTestHolder;
 
 /**
  * Main's GameTests (its {@link CulpritGameTests} list) as 1.21.1 runs them (this branch's own, manual.txt): a generator
@@ -48,8 +48,8 @@ public final class GameTestRegistration {
             if (!chosen.isEmpty() && !chosen.contains(spec.name())) {
                 continue;
             }
-            out.add(new TestFunction(spec.batch(), spec.name(), spec.structure().toString(), Rotation.NONE, spec.maxTicks(), 0L, true, false,
-                    1, 1, spec.sky(), spec.body()));
+            out.add(new TestFunction(spec.batch(), spec.name(), spec.structure().toString(), Rotation.NONE, spec.maxTicks(), 0L, true,
+                    1, 1, spec.body()));
         }
         return out;
     }

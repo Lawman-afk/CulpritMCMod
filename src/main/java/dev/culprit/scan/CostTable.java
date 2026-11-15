@@ -106,13 +106,13 @@ final class CostTable {
         int id = typeOfObject.getInt(thing);
         if (id < 0) {
             String name;
-            if (thing instanceof net.minecraft.world.level.block.Block block) {
+            if (((Object) thing) instanceof net.minecraft.world.level.block.Block block) {
                 name = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString();
-            } else if (thing instanceof net.minecraft.world.level.material.Fluid fluid) {
+            } else if (((Object) thing) instanceof net.minecraft.world.level.material.Fluid fluid) {
                 name = net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey(fluid).toString();
-            } else if (thing instanceof net.minecraft.core.particles.ParticleType<?> particle) {
+            } else if (((Object) thing) instanceof net.minecraft.core.particles.ParticleType<?> particle) {
                 name = String.valueOf(net.minecraft.core.registries.BuiltInRegistries.PARTICLE_TYPE.getKey(particle));
-            } else if (thing instanceof Class<?> type) {
+            } else if (((Object) thing) instanceof Class<?> type) {
                 name = classTypeName(type);
             } else {
                 name = String.valueOf(thing);
@@ -320,7 +320,7 @@ final class CostTable {
             kept.add(record);
             return record;
         }
-        TickRecord fastest = kept.getFirst();
+        TickRecord fastest = dev.culprit.legacy.J21.first(kept);
         for (TickRecord record : kept) {
             if (record.tickNs < fastest.tickNs) {
                 fastest = record;

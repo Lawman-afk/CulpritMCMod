@@ -1,6 +1,8 @@
 plugins {
     id 'java-library'
-    id 'net.neoforged.moddev' version '2.0.148'
+    // Forge for 1.20.1 through ModDevGradle's plugin for the older Forge versions (official names in the sources, the jar
+    // turned back to Forge's SRG names for players: reobfJar), as Ground Burst's 1.20.1 branch.
+    id 'net.neoforged.moddev.legacyforge' version '2.0.148'
     id 'idea'
 }
 
@@ -12,16 +14,14 @@ version = mod_version
 group = mod_group_id
 
 sourceSets.main.resources {
-    // Resources produced by the data generators (lang).
+    // Resources produced by the data generators (lang), ported with the rest from the 1.21.1 build.
     srcDir('src/generated/resources')
-
-    // The data generators' cache (patterns are relative to each resource folder).
     exclude("**/.cache", "**/.cache/**")
 }
 
 repositories {
-    // Iris and Sodium, as released (run with -PwithIris), the shader packs the dev runs test with, Distant Horizons:
-    // compatibility runs only, never dependencies of the mod.
+    // Oculus and Embeddium (Iris and Sodium for Forge, run with -PwithIris), the shader packs the dev runs test with,
+    // Distant Horizons: compatibility runs only, never dependencies of the mod.
     exclusiveContent {
         forRepository {
             maven {
@@ -36,6 +36,7 @@ repositories {
 }
 
 base {
+    // The Minecraft version in the name, so this jar is never taken for another version's.
     archivesName = "${mod_id}-mc${minecraft_version}"
 }
 
@@ -47,24 +48,26 @@ tasks.named('jar', Jar) {
     }
     // The dev aids (the prepared test world, photographers) and the developer's tests (GameTests and their
     // structures) are for the dev runs only, never in a released jar.
-    exclude('dev/culprit/devworld/**', 'dev/culprit/gametest/**', 'data/culprit/structure/gametest/**')
+    exclude('dev/culprit/devworld/**', 'dev/culprit/gametest/**', 'data/culprit/structures/gametest/**')
+    // Forge 1.20.1 finds a mod's mixins through the jar's manifest.
+    manifest.attributes([
+            'MixinConfigs': "${mod_id}.legacy.mixins.json,${mod_id}.mixins.json,${mod_id}.port.mixins.json"
+    ])
 }
 
-// Mojang ships Java 25 to players in 26.3, so the mod targets Java 25.
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
-// Every compile error at once while porting (javac stops at 100).
-tasks.withType(JavaCompile).configureEach { options.compilerArgs += ['-Xmaxerrs', '10000'] }
+// Minecraft 1.20.1 runs on Java 17, so this branch targets Java 17.
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 // The photographers' window, width x height: -PshotSize=1920x1080 for the mod page's gallery pictures.
 def shotSize = (project.findProperty('shotSize') ?: '1280x720').toString().split('x')
 
-neoForge {
-    version = project.neo_version
+legacyForge {
+    version = "${minecraft_version}-${forge_version}"
 
     runs {
         client {
             client()
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'forge.enabledGameTestNamespaces', project.mod_id
         }
 
         // Makes the test world "Culprit Lab" (run/saves/culprit_lab) with lag sources set out and signs saying what to
@@ -79,13 +82,13 @@ neoForge {
         server {
             server()
             programArgument '--nogui'
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'forge.enabledGameTestNamespaces', project.mod_id
         }
 
         // Launches a GameTestServer, runs every registered gametest for this mod, then exits.
         gameTestServer {
             type = "gameTestServer"
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'forge.enabledGameTestNamespaces', project.mod_id
             // -PonlyTests=<name>,<name>: only those tests (GameTestRegistration).
             systemProperty 'culprit.onlyTests', (project.findProperty('onlyTests') ?: '').toString()
             // -Pbench: the idle-cost benchmark (BenchTests); -PnoHooks: without the tick hooks, to compare.
@@ -93,15 +96,10 @@ neoForge {
             systemProperty 'culprit.noHooks', providers.gradleProperty('noHooks').isPresent().toString()
         }
 
-        data {
-            clientData()
-            programArguments.addAll '--mod', project.mod_id, '--all',
-                    '--output', file('src/generated/resources/').getAbsolutePath(),
-                    '--existing', file('src/main/resources/').getAbsolutePath()
-        }
-
         configureEach {
             systemProperty 'forge.logging.markers', 'REGISTRIES'
+            // The mixins' refmap names official names; the dev runs are on official names too.
+            systemProperty 'mixin.env.remapRefMap', 'true'
             if (project.findProperty('jfr') != null) {
                 def jfrDir = file('run/jfr')
                 jfrDir.mkdirs()
@@ -118,41 +116,16 @@ neoForge {
     }
 }
 
-// -PirisStable: the released pair most 1.21.1 shader players have (Iris 1.8.12 asks for Sodium 0.6.13); without it the
-// newest (Iris 1.8.14's beta with Sodium 0.8).
-def irisStable = providers.gradleProperty('irisStable').isPresent()
-def irisVersion = irisStable ? iris_stable_version : iris_version
-def sodiumVersion = irisStable ? sodium_stable_version : sodium_version
-
-// Runtime-only dependencies for dev testing that must not leak into the published metadata.
-configurations {
-    runtimeClasspath.extendsFrom localRuntime
-}
-
-dependencies {
-    // Main's nullness annotations (26.x ships them; 1.21.1 does not): only to compile, as annotations go unread.
-    compileOnly 'org.jspecify:jspecify:1.0.0'
-    // Shader packs (optional at runtime): -PwithIris runs Iris and Sodium in the dev client (Sodium from run/mods,
-    // sodiumToMods below).
-    if (providers.gradleProperty('withIris').isPresent()) {
-        localRuntime "maven.modrinth:iris:${irisVersion}"
-    }
-    // Distant Horizons (optional at runtime): -PwithDH runs it in the dev client.
-    if (providers.gradleProperty('withDH').isPresent()) {
-        localRuntime "maven.modrinth:distanthorizons:${dh_version}"
-    }
-}
-
 // The test runs leave the person at the computer their mouse and their ears (the user's wishes): their window shows
-// behind the other windows without the focus and never grabs the mouse (dev.culprit.client.DevRuns, set by
-// culprit.keepMouse; the runs turn the camera themselves), NeoForge's early loading window turned off for them in
+// behind the other windows without the focus and never grabs the mouse (dev.culprit.client.DevRuns and the dev mixins,
+// set by culprit.keepMouse; the runs turn the camera themselves), Forge's early loading window turned off for them in
 // run/config/fml.toml; every client run is muted (master volume 0 in run/options.txt; -Psound=on keeps the sound) and
 // skips the first-launch accessibility screen. The test runs' names go in testRunNames as they are added.
 def testRunNames = ['runLab']
 def fmlConfig = file('run/config/fml.toml')
 def clientOptions = file('run/options.txt')
 def withSound = providers.gradleProperty('sound').isPresent()
-neoForge.runs.matching { ('run' + it.name.capitalize()) in testRunNames }.configureEach {
+legacyForge.runs.matching { ('run' + it.name.capitalize()) in testRunNames }.configureEach {
     systemProperty 'culprit.keepMouse', 'true'
 }
 tasks.matching { it.name in testRunNames }.configureEach {
@@ -171,7 +144,7 @@ tasks.matching { it.name.startsWith('run') && !(it.name in ['runGameTestServer',
         if (!withSound) {
             text = text =~ /(?m)^soundCategory_master:/
                     ? text.replaceAll(/(?m)^soundCategory_master:.*$/, 'soundCategory_master:0.0')
-                    : text + 'soundCategory_master:0.0\n'
+                    : text + (text.isEmpty() || text.endsWith('\n') ? '' : '\n') + 'soundCategory_master:0.0\n'
         }
         text = text =~ /(?m)^onboardAccessibility:/
                 ? text.replaceAll(/(?m)^onboardAccessibility:.*$/, 'onboardAccessibility:false')
@@ -180,8 +153,53 @@ tasks.matching { it.name.startsWith('run') && !(it.name in ['runGameTestServer',
     }
 }
 
+// 1.20.1's test server makes its world as a dedicated server does, from run/server.properties, and keeps it from run to
+// run: each run starts on a new flat world (as Ground Burst's 1.20.1 build).
+def gameTestWorld = file('run/world')
+def gameTestProperties = file('run/server.properties')
+tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+    doFirst {
+        gameTestWorld.deleteDir()
+        gameTestProperties.text = 'level-type=minecraft\\:flat\n' +
+                'generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},' +
+                '{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}\n'
+    }
+}
+
+// The mixins' refmap (official names to Forge's SRG names for players' games), made as the code compiles.
+mixin {
+    add sourceSets.main, "${mod_id}.refmap.json"
+    config "${mod_id}.legacy.mixins.json"
+    config "${mod_id}.mixins.json"
+    config "${mod_id}.port.mixins.json"
+}
+
+// Runtime-only dependencies for dev testing that must not leak into the published metadata.
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    // MixinExtras: its annotations for the refmap, and the library packed in the jar (Forge 1.20.1 carries none).
+    compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinextras_version}"))
+    implementation(jarJar("io.github.llamalad7:mixinextras-forge:${mixinextras_version}"))
+    // Main's nullness annotations (26.x ships them; 1.20.1 does not): only to compile, as annotations go unread.
+    compileOnly 'org.jspecify:jspecify:1.0.0'
+
+    // Shader packs (optional at runtime): -PwithIris runs Oculus and Embeddium in the dev client.
+    if (providers.gradleProperty('withIris').isPresent()) {
+        modRuntimeOnly "maven.modrinth:oculus:${oculus_version}"
+        modRuntimeOnly "maven.modrinth:embeddium:${embeddium_version}"
+    }
+    // Distant Horizons (optional at runtime): -PwithDH runs it in the dev client.
+    if (providers.gradleProperty('withDH').isPresent()) {
+        modRuntimeOnly "maven.modrinth:distanthorizons:${dh_version}"
+    }
+}
+
 // The shader packs the dev runs test with (-PwithIris; -PirisPack=complementary|unbound|bsl|bliss|photon|solas|makeup|off
-// picks one, Complementary by default): put in run/shaderpacks, and Iris's config pointed at the one picked.
+// picks one, Complementary by default): put in run/shaderpacks, and Oculus's config pointed at the one picked.
 configurations {
     shaderPacks {
         canBeConsumed = false
@@ -199,7 +217,7 @@ dependencies {
 }
 var installShaderPacks = tasks.register('installShaderPacks') {
     group = 'development'
-    description = 'Puts the test shader packs in run/shaderpacks and sets Iris to the one -PirisPack names.'
+    description = 'Puts the test shader packs in run/shaderpacks and sets Oculus to the one -PirisPack names.'
     var packs = configurations.shaderPacks
     var pick = (project.findProperty('irisPack') ?: 'complementary').toString()
     var runDir = file('run')
@@ -208,12 +226,11 @@ var installShaderPacks = tasks.register('installShaderPacks') {
     doLast {
         var dir = new File(runDir, 'shaderpacks')
         dir.mkdirs()
-        // Each pack's file by the name -PirisPack picks it by.
         var names = ['complementary-reimagined': 'complementary', 'complementary-unbound': 'unbound', 'bsl-shaders': 'bsl',
                      'bliss-shader': 'bliss', 'photon-shader': 'photon', 'solas-shader': 'solas', 'makeup-ultra-fast-shaders': 'makeup']
         String chosen = null
         var wanted = packs.files.collect { f -> var key = names.keySet().find { f.name.startsWith(it) }; key != null ? names[key] + '.zip' : f.name }
-        dir.listFiles().findAll { it.name.endsWith('.zip') && !wanted.contains(it.name) }.each { it.delete() }   // packs named otherwise before
+        dir.listFiles().findAll { it.name.endsWith('.zip') && !wanted.contains(it.name) }.each { it.delete() }
         packs.files.each { f ->
             var key = names.keySet().find { f.name.startsWith(it) }
             var name = key != null ? names[key] + '.zip' : f.name
@@ -222,61 +239,39 @@ var installShaderPacks = tasks.register('installShaderPacks') {
                 chosen = name
             }
         }
-        var config = new File(runDir, 'config/iris.properties')
-        config.parentFile.mkdirs()
-        var props = new Properties()
-        if (config.exists()) {
-            config.withInputStream { props.load(it) }
+        ['oculus.properties', 'iris.properties'].each { fileName ->
+            var config = new File(runDir, "config/${fileName}")
+            config.parentFile.mkdirs()
+            var props = new Properties()
+            if (config.exists()) {
+                config.withInputStream { props.load(it) }
+            }
+            props.setProperty('enableShaders', (pick != 'off' && chosen != null).toString())
+            if (chosen != null) {
+                props.setProperty('shaderPack', chosen)
+            }
+            config.withOutputStream { props.store(it, 'Set by gradle installShaderPacks') }
         }
-        props.setProperty('enableShaders', (pick != 'off' && chosen != null).toString())
-        if (chosen != null) {
-            props.setProperty('shaderPack', chosen)
-        }
-        config.withOutputStream { props.store(it, 'Set by gradle installShaderPacks') }
-        // Iris's own metadata warns as it loads, and NeoForge's warning screen would hold the photographers before
-        // the title screen: the dev runs with Iris skip it.
-        var neo = new File(runDir, 'config/neoforge-client.toml')
-        if (neo.exists()) {
-            neo.text = neo.text.replaceAll(/(?m)^showLoadWarnings\s*=\s*true/, 'showLoadWarnings = false')
+        var forge = new File(runDir, 'config/forge-client.toml')
+        if (forge.exists()) {
+            forge.text = forge.text.replaceAll(/(?m)^(\s*)showLoadWarnings\s*=\s*true/, '$1showLoadWarnings = false')
         } else {
-            neo.text = 'showLoadWarnings = false\n'
+            forge.parentFile.mkdirs()
+            forge.text = '[client]\n\tshowLoadWarnings = false\n'
         }
-        logger.lifecycle("Shader packs in ${dir}; Iris set to ${pick == 'off' ? 'no pack' : chosen}")
+        logger.lifecycle("Shader packs in ${dir}; Oculus set to ${pick == 'off' ? 'no pack' : chosen}")
     }
-}
-// Sodium for 1.21.1 comes as a wrapper: a library of its early start-up classes with the mod itself and its Fabric API
-// parts packed inside. On the dev runs' classpath the launcher took the wrapper for the mod and loaded none of Sodium
-// (Iris then failed for want of its classes); from a mods folder it loads as it does for players. So the dev runs with
-// Iris put it in run/mods, and the others take it out again (as Ground Burst's 1.21.1 build does).
-configurations {
-    sodiumWrapper {
-        canBeConsumed = false
-        transitive = false
-    }
-}
-dependencies {
-    sodiumWrapper "maven.modrinth:sodium:${sodiumVersion}"
-}
-var sodiumToMods = tasks.register('sodiumToMods', Sync) {
-    from(configurations.sodiumWrapper)
-    into file('run/mods')
-    preserve { include '**/*' }
-    rename { 'sodium-dev-iris.jar' }
-}
-var sodiumFromMods = tasks.register('sodiumFromMods', Delete) {
-    delete file('run/mods/sodium-dev-iris.jar')
 }
 if (providers.gradleProperty('withIris').isPresent()) {
-    tasks.matching { it.name.startsWith('run') && it.name != 'runData' }.configureEach { it.dependsOn installShaderPacks, sodiumToMods }
-} else {
-    tasks.matching { it.name.startsWith('run') }.configureEach { it.dependsOn sodiumFromMods }
+    tasks.matching { it.name.startsWith('run') && !(it.name in ['runGameTestServer', 'runServer', 'runData']) }.configureEach { it.dependsOn installShaderPacks }
 }
 
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
     var replaceProperties = [
             minecraft_version      : minecraft_version,
             minecraft_version_range: minecraft_version_range,
-            neo_version            : neo_version,
+            forge_version          : forge_version,
+            forge_version_range    : forge_version_range,
             mod_id                 : mod_id,
             mod_name               : mod_name,
             mod_license            : mod_license,
@@ -290,10 +285,12 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
     into "build/generated/sources/modMetadata"
 }
 sourceSets.main.resources.srcDir generateModMetadata
-neoForge.ideSyncTask generateModMetadata
+legacyForge.ideSyncTask generateModMetadata
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    // Every compile error at once while porting (javac stops at 100).
+    options.compilerArgs += ['-Xmaxerrs', '10000']
 }
 
 idea {
@@ -303,10 +300,6 @@ idea {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Deployment: every `build` ends with the fresh jar in the CurseForge test instance that `culprit_instance_dir_1_21_1`
-// names (set in your own ~/.gradle/gradle.properties); without one the jar just stays in build/libs.
-// ---------------------------------------------------------------------------------------------
 
 abstract class DeployToInstance extends DefaultTask {
     @InputFile
@@ -318,7 +311,7 @@ abstract class DeployToInstance extends DefaultTask {
     @Input
     abstract Property<String> getModId()
 
-    /** Whether an instance folder was named outright (culprit_instance_dir_1_21_1): then a missing one is an error. */
+    /** Whether an instance folder was named outright (culprit_instance_dir_1_20_1): then a missing one is an error. */
     @Input
     abstract Property<Boolean> getRequired()
 
@@ -332,15 +325,13 @@ abstract class DeployToInstance extends DefaultTask {
             String where = dir == null ? "(no folder set on this system)" : "${dir.parentFile}"
             if (required.get()) {
                 throw new GradleException("CurseForge instance not found at ${where}. " +
-                        "Set culprit_instance_dir_1_21_1 in gradle.properties or pass -Pculprit_instance_dir_1_21_1=<path>.")
+                        "Set culprit_instance_dir_1_20_1 in gradle.properties or pass -Pculprit_instance_dir_1_20_1=<path>.")
             }
-            // Anyone else building the mod has no test instance: the jar stays in build/libs.
-            logger.lifecycle("No CurseForge instance at ${where}: the jar was not deployed (set culprit_instance_dir_1_21_1 to deploy it).")
+            logger.lifecycle("No CurseForge instance at ${where}: the jar was not deployed (set culprit_instance_dir_1_20_1 to deploy it).")
             return
         }
         dir.mkdirs()
 
-        // Remove every previous build of this mod (any version) so only one copy is ever loaded.
         String prefix = modId.get() + '-'
         dir.listFiles()
                 .findAll { it.isFile() && it.name.startsWith(prefix) && it.name.endsWith('.jar') }
@@ -360,16 +351,16 @@ abstract class DeployToInstance extends DefaultTask {
     }
 }
 
-var instanceDir = providers.gradleProperty('culprit_instance_dir_1_21_1')
+var instanceDir = providers.gradleProperty('culprit_instance_dir_1_20_1')
         .filter { !it.isBlank() }
 
 var deployToInstance = tasks.register('deployToInstance', DeployToInstance) {
     group = 'deployment'
-    description = 'Copies the built mod jar into the 1.21.1 CurseForge test instance (culprit_instance_dir_1_21_1), replacing older builds.'
-    jarFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
+    description = 'Copies the built mod jar (reobfJar: Forge names) into the 1.20.1 CurseForge test instance, replacing older builds.'
+    jarFile = tasks.named('reobfJar').flatMap { it.archiveFile }
     modsDir = layout.dir(instanceDir.map { new File(it, 'mods') })
     modId = project.mod_id
-    required = providers.gradleProperty('culprit_instance_dir_1_21_1').map { !it.isBlank() }.orElse(false)
+    required = providers.gradleProperty('culprit_instance_dir_1_20_1').map { !it.isBlank() }.orElse(false)
     outputs.upToDateWhen { false }
 }
 

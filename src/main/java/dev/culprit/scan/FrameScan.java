@@ -103,7 +103,7 @@ public final class FrameScan {
     }
 
     private void begin() {
-        table = new CostTable(Math.clamp(seconds * 3, 5, 60), FramePhase.COUNT);   // the slowest frames kept whole, for the stutters
+        table = new CostTable(dev.culprit.legacy.J21.clamp(seconds * 3, 5, 60), FramePhase.COUNT);   // the slowest frames kept whole, for the stutters
         FrameProbe.table = table;
         FrameProbe.thread = Thread.currentThread();
         FrameProbe.overheadNs = TickScan.timerCost();

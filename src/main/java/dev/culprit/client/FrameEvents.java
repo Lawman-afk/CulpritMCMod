@@ -2,9 +2,9 @@ package dev.culprit.client;
 
 import dev.culprit.scan.FrameProbe;
 import dev.culprit.scan.FramePhase;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.neoforge.client.event.RenderFrameEvent;
-import net.neoforged.neoforge.common.NeoForge;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.common.MinecraftForge;
 
 /**
  * Mods' frame events, timed during a frame scan: a listener that runs before every other one starts the clock, and one
@@ -17,10 +17,8 @@ public final class FrameEvents {
     private FrameEvents() {}
 
     public static void register() {
-        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, RenderFrameEvent.Pre.class, e -> begin());
-        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, RenderFrameEvent.Pre.class, e -> end());
-        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, RenderFrameEvent.Post.class, e -> begin());
-        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, RenderFrameEvent.Post.class, e -> end());
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST, false, net.minecraftforge.event.TickEvent.RenderTickEvent.class, e -> begin());
+        MinecraftForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, net.minecraftforge.event.TickEvent.RenderTickEvent.class, e -> end());
     }
 
     private static void begin() {

@@ -3,7 +3,8 @@
   "minVersion": "0.8",
   "package": "dev.culprit.mixin",
   "plugin": "dev.culprit.mixin.CulpritMixinPlugin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "culprit.refmap.json",
   "mixins": [
     "LevelTickMixin",
     "ServerLevelTickMixin",

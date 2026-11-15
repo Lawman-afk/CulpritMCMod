@@ -3,17 +3,17 @@ package dev.culprit.config;
 import net.minecraft.commands.Commands;
 
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /** The server's settings for Culprit (DESIGN §5.5): who may scan, and how long a scan may last. */
 public final class CulpritServerConfig {
-    private static final ModConfigSpec.Builder B = new ModConfigSpec.Builder();
+    private static final ForgeConfigSpec.Builder B = new ForgeConfigSpec.Builder();
 
     static {
         B.comment("Who may use Culprit's tick scans on this server.").push("permissions");
     }
 
-    public static final ModConfigSpec.IntValue SCAN_LEVEL = B
+    public static final ForgeConfigSpec.IntValue SCAN_LEVEL = B
             .comment("Permission level needed to start and stop tick scans and to see their results: 0 everyone, 1 moderators,",
                     "2 operators (the default), 3 admins, 4 the owner. Teleporting to a result uses the game's own /tp permission.")
             .defineInRange("scanLevel", 2, 0, 4);
@@ -22,7 +22,7 @@ public final class CulpritServerConfig {
         B.pop().comment("Tick scans.").push("scans");
     }
 
-    public static final ModConfigSpec.IntValue MAX_SECONDS = B
+    public static final ForgeConfigSpec.IntValue MAX_SECONDS = B
             .comment("The longest tick scan anyone may start, in seconds.")
             .defineInRange("maxSeconds", 120, 5, 600);
 
@@ -30,7 +30,7 @@ public final class CulpritServerConfig {
         B.pop();
     }
 
-    public static final ModConfigSpec SPEC = B.build();
+    public static final ForgeConfigSpec SPEC = B.build();
 
     private CulpritServerConfig() {}
 

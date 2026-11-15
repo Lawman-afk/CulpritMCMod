@@ -170,7 +170,7 @@ public final class ScanReport {
             }
             long pos = t.pos[s];
             int entityId = -1;
-            if (t.ref[s] instanceof Entity entity && !entity.isRemoved()) {
+            if (((Object) t.ref[s]) instanceof Entity entity && !entity.isRemoved()) {
                 pos = entity.blockPosition().asLong();   // where it is now, not where it was first measured
                 entityId = entity.getId();
             }

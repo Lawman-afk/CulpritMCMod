@@ -28,7 +28,7 @@ import net.minecraft.world.entity.projectile.ThrownEnderpearl;
 import net.minecraft.world.level.ChunkPos;
 
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.neoforged.neoforge.common.world.chunk.ForcedChunkManager;
+import net.minecraftforge.common.world.ForgeChunkManager;
 
 
 /**
@@ -249,7 +249,7 @@ public final class ChunkCensus {
             case ChunkData.MODS -> {
                 // A NeoForge chunk loader is the mod's and the block or entity that owns it; a mod's own kind of ticket its.
                 List<String> owners = modOwners.get(chunk);
-                if (typeName.startsWith("neoforge:")) {
+                if (typeName.startsWith("forge:")) {
                     yield owners != null && !owners.isEmpty() ? String.join("; ", owners) : "a mod's chunk loader";
                 }
                 yield typeName;
@@ -265,7 +265,7 @@ public final class ChunkCensus {
     private static Long2ObjectMap<List<String>> modOwners(ServerLevel level) {
         Long2ObjectMap<List<String>> owners = new Long2ObjectOpenHashMap<>();
         try {
-            var data = level.getDataStorage().get(net.minecraft.world.level.ForcedChunksSavedData.factory(), "chunks");
+            var data = level.getDataStorage().get(net.minecraft.world.level.ForcedChunksSavedData::load, "chunks");
             if (data == null) {
                 return owners;
             }
@@ -288,7 +288,7 @@ public final class ChunkCensus {
                             java.util.function.BiFunction<ResourceLocation, Object, String> name) {
         for (var entry : byOwner.entrySet()) {
             var key = (dev.culprit.mixin.TicketOwnerAccessor) entry.getKey();
-            String owner = name.apply(key.culprit$id(), key.culprit$owner());
+            String owner = name.apply(new ResourceLocation(key.culprit$modId(), "chunks"), key.culprit$owner());
             for (long chunk : entry.getValue()) {
                 List<String> list = owners.computeIfAbsent(chunk, k -> new ArrayList<>());
                 if (!list.contains(owner)) {

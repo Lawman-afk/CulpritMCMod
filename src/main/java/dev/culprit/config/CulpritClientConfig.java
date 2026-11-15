@@ -1,6 +1,6 @@
 package dev.culprit.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /**
  * A player's own settings for Culprit (DESIGN §5.5): how the results show on the world, and the HUD line, on one page
@@ -8,7 +8,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  */
 public final class CulpritClientConfig {
     /** Where the HUD line sits (named in words on the settings page). */
-    public enum Corner implements net.neoforged.neoforge.common.TranslatableEnum {
+    public enum Corner implements dev.culprit.legacy.TranslatableEnum {
         TOP_LEFT("Top left"), TOP_RIGHT("Top right");
 
         private final String english;
@@ -24,36 +24,36 @@ public final class CulpritClientConfig {
         }
     }
 
-    private static final ModConfigSpec.Builder B = new ModConfigSpec.Builder();
+    private static final ForgeConfigSpec.Builder B = new ForgeConfigSpec.Builder();
 
-    public static final ModConfigSpec.IntValue RANGE = B
+    public static final ForgeConfigSpec.IntValue RANGE = B
             .comment("How far from you things are boxed, in blocks.")
             .translation("culprit.configuration.range")
             .defineInRange("range", 64, 16, 128);
 
-    public static final ModConfigSpec.IntValue LABELS = B
+    public static final ForgeConfigSpec.IntValue LABELS = B
             .comment("How many of the costliest things near you are labelled with their cost (0: none; the one you look at is",
                     "always read out under the crosshair).")
             .translation("culprit.configuration.labels")
             .defineInRange("labels", 12, 0, 30);
 
-    public static final ModConfigSpec.IntValue HIDE_AFTER = B
+    public static final ForgeConfigSpec.IntValue HIDE_AFTER = B
             .comment("Minutes after which the results hide from the world by themselves (0: they stay until you hide them).")
             .translation("culprit.configuration.hideAfterMinutes")
             .defineInRange("hideAfterMinutes", 0, 0, 120);
 
-    public static final ModConfigSpec.BooleanValue HUD_LINE = B
+    public static final ForgeConfigSpec.BooleanValue HUD_LINE = B
             .comment("Show the server's ticks a second and time a tick (on a server, when you may scan there) and your frames a",
                     "second and time a frame in a line on screen. A key in Controls turns it on and off (none set at first).")
             .translation("culprit.configuration.hudLine")
             .define("hudLine", false);
 
-    public static final ModConfigSpec.EnumValue<Corner> HUD_CORNER = B
+    public static final ForgeConfigSpec.EnumValue<Corner> HUD_CORNER = B
             .comment("Which corner of the screen the HUD line sits in.")
             .translation("culprit.configuration.hudCorner")
             .defineEnum("hudCorner", Corner.TOP_LEFT);
 
-    public static final ModConfigSpec SPEC = B.build();
+    public static final ForgeConfigSpec SPEC = B.build();
 
     private CulpritClientConfig() {}
 

@@ -138,9 +138,9 @@ public final class FrameProbe {
     public static void drawn(Object state, long ns, long handedIn) {
         Object thing = STATES.get(state);
         int slot;
-        if (thing instanceof Entity entity) {
+        if (((Object) thing) instanceof Entity entity) {
             slot = entity(entity, ns);
-        } else if (thing instanceof BlockEntity blockEntity) {
+        } else if (((Object) thing) instanceof BlockEntity blockEntity) {
             slot = blockEntity(blockEntity, ns);
         } else {
             phase(FramePhase.SUBMIT, ns);

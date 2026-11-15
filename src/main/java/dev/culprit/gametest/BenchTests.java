@@ -5,8 +5,8 @@ import java.util.Arrays;
 import dev.culprit.Culprit;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
 
 /**
  * The idle cost of the tick hooks (DESIGN §5.2): a plot full of hoppers and pigs, the server's tick timed over many
@@ -28,8 +28,8 @@ final class BenchTests {
         if (!ENABLED) {
             return;
         }
-        NeoForge.EVENT_BUS.addListener((ServerTickEvent.Pre e) -> tickStart = System.nanoTime());
-        NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post e) -> {
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ServerTickEvent e) -> { if (e.phase != net.minecraftforge.event.TickEvent.Phase.START) return; tickStart = System.nanoTime(); });
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ServerTickEvent e) -> {if (e.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
             if (measured >= 0 && measured < MEASURE) {
                 TICKS[measured++] = System.nanoTime() - tickStart;
             }

@@ -15,7 +15,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
-import net.neoforged.fml.ModList;
+import net.minecraftforge.fml.ModList;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -42,7 +42,7 @@ final class OwnerNames {
     }
 
     static String entity(Entity entity) {
-        if (entity instanceof Player player) {
+        if (((Object) entity) instanceof Player player) {
             return player.getName().getString();
         }
         BlockPos at = entity.blockPosition();

@@ -4,12 +4,12 @@ import java.util.Locale;
 
 import dev.culprit.config.CulpritClientConfig;
 import dev.culprit.net.CulpritNetwork;
-import net.minecraft.client.DeltaTracker;
+import dev.culprit.legacy.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import dev.culprit.port.GuiGraphicsExtractor;
 import net.minecraft.client.server.IntegratedServer;
-import net.neoforged.neoforge.network.PacketDistributor;
+import dev.culprit.legacy.net.PacketDistributor;
 
 /**
  * The HUD line (DESIGN §4.5): the server's ticks a second and time a tick, and the client's frames a second and time a
@@ -49,7 +49,7 @@ public final class HudLine {
             asked = false;
             return;
         }
-        if (want != asked && connection.hasChannel(CulpritNetwork.LoadRequest.TYPE)) {
+        if (want != asked && dev.culprit.legacy.client.ClientNet.serverHas(connection)) {
             PacketDistributor.sendToServer(new CulpritNetwork.LoadRequest(want));
             asked = want;
         }
@@ -69,7 +69,7 @@ public final class HudLine {
 
     public static void draw(GuiGraphicsExtractor g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
-        if (!CulpritClientConfig.hudLine() || mc.level == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()) {
+        if (!CulpritClientConfig.hudLine() || mc.level == null || mc.options.hideGui || mc.options.renderDebug) {
             return;
         }
         Font font = mc.font;
@@ -91,8 +91,8 @@ public final class HudLine {
         float tps = 0;
         IntegratedServer own = mc.getSingleplayerServer();
         if (own != null) {
-            tickNs = own.getAverageTickTimeNanos();
-            tps = (float) Math.min(own.tickRateManager().tickrate(), tickNs > 0 ? 1e9 / tickNs : 20);
+            tickNs = (long) (own.getAverageTickTime() * 1_000_000L);
+            tps = (float) Math.min(20f, tickNs > 0 ? 1e9 / tickNs : 20);
         } else if (serverTickNs >= 0 && now - serverAtMillis < 3000) {
             tickNs = serverTickNs;
             tps = serverTps;

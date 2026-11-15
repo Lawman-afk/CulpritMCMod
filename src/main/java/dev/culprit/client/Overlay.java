@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.joml.Matrix4f;
-import org.joml.Matrix4fStack;
 import org.joml.Quaternionf;
 import org.jspecify.annotations.Nullable;
 
@@ -19,7 +18,7 @@ import com.mojang.blaze3d.vertex.VertexSorting;
 import dev.culprit.command.ReportText;
 import dev.culprit.net.ReportData;
 import dev.culprit.scan.Kind;
-import net.minecraft.client.DeltaTracker;
+import dev.culprit.legacy.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import dev.culprit.port.GuiGraphicsExtractor;
@@ -40,8 +39,8 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
-import net.neoforged.neoforge.common.NeoForge;
+import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.minecraftforge.common.MinecraftForge;
 
 /**
  * A scan's results drawn on the world (DESIGN §4.4): a box round each costly thing near the player, in the cost's
@@ -130,7 +129,7 @@ public final class Overlay {
     private Overlay() {}
 
     public static void register() {
-        NeoForge.EVENT_BUS.addListener(Overlay::stage);
+        MinecraftForge.EVENT_BUS.addListener(Overlay::stage);
     }
 
     public static boolean shown() {
@@ -203,14 +202,14 @@ public final class Overlay {
         }
         var camera = event.getCamera();
         Vec3 cam = camera.getPosition();
-        camera.rotation().transform(FORWARD.set(0, 0, -1));
+        dev.culprit.legacy.CameraTurn.of(camera).transform(FORWARD.set(0, 0, -1));
         gather(r, dim, mc.level, cam);
         if (boxes == 0 && tiles == 0 && !beam) {
             return;
         }
         begin(event);
         shapes();
-        labels(r, dim, mc, cam, camera.rotation());
+        labels(r, dim, mc, cam, dev.culprit.legacy.CameraTurn.of(camera));
     }
 
     /** This frame's boxes, chunk outlines and beam, costliest first, near the camera. */
@@ -322,7 +321,7 @@ public final class Overlay {
         }
         var camera = event.getCamera();
         Vec3 cam = camera.getPosition();
-        camera.rotation().transform(FORWARD.set(0, 0, -1));
+        dev.culprit.legacy.CameraTurn.of(camera).transform(FORWARD.set(0, 0, -1));
         ClientLevel level = mc.level;
         chunkMode = true;
         boxes = 0;
@@ -360,7 +359,7 @@ public final class Overlay {
         shapes();
         // The loaders that are not players, named over their chunk.
         Font font = mc.font;
-        Quaternionf facing = camera.rotation();
+        Quaternionf facing = dev.culprit.legacy.CameraTurn.of(camera);
         placed = 0;
         facing.transform(RIGHT.set(1, 0, 0));
         facing.transform(UP.set(0, 1, 0));
@@ -380,7 +379,7 @@ public final class Overlay {
             }
             Component why = dev.culprit.chunks.ChunkText.reasonName(d.sreason[s]);
             if (label(font, cam, facing, x, y, z, Component.literal(d.sowner[s]).getVisualOrderText(),
-                    why.copy().withColor(ChunksPanel.COLOUR[d.sreason[s]]).getVisualOrderText(), Font.DisplayMode.SEE_THROUGH, false)) {
+                    why.copy().withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(ChunksPanel.COLOUR[d.sreason[s]])).getVisualOrderText(), Font.DisplayMode.SEE_THROUGH, false)) {
                 named++;
             }
         }
@@ -408,7 +407,7 @@ public final class Overlay {
     /** Whether a block stands between the camera and where the ray meets a thing (glass and the like let it through). */
     private static boolean hidden(ClientLevel level, Vec3 cam, ReportData r, int i, double t) {
         Vec3 to = cam.add(FORWARD.x * t, FORWARD.y * t, FORWARD.z * t);
-        BlockHitResult hit = level.clip(new ClipContext(cam, to, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, CollisionContext.empty()));
+        BlockHitResult hit = level.clip(new ClipContext(cam, to, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, (net.minecraft.world.entity.Entity) null));
         if (hit.getType() != HitResult.Type.BLOCK || (r.entity[i] < 0 && hit.getBlockPos().asLong() == r.pos[i])) {
             return false;
         }
@@ -428,7 +427,7 @@ public final class Overlay {
     /** Whether the camera sees a thing: nothing solid between it and the box's middle but the thing's own block. */
     private static boolean inSight(ClientLevel level, Vec3 cam, ReportData r, int i, AABB box) {
         BlockHitResult hit = level.clip(new ClipContext(cam, box.getCenter(), ClipContext.Block.VISUAL, ClipContext.Fluid.NONE,
-                CollisionContext.empty()));
+                (net.minecraft.world.entity.Entity) null));
         return hit.getType() != HitResult.Type.BLOCK || (r.entity[i] < 0 && hit.getBlockPos().asLong() == r.pos[i]);
     }
 
@@ -592,8 +591,8 @@ public final class Overlay {
         FormattedCharSequence[] cache = labelCost;
         if (cache[i] == null) {
             long perTick = r.perTick(r.total[i]);
-            cache[i] = Component.literal(ReportText.time(perTick) + (r.frames ? "/f" : "/t")).withColor(Heat.rgb(Heat.of(perTick)))
-                    .append(Component.literal("  " + ReportText.share(r.total[i], r.tickNsTotal)).withColor(0xC8C8C8)).getVisualOrderText();
+            cache[i] = Component.literal(ReportText.time(perTick) + (r.frames ? "/f" : "/t")).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(Heat.rgb(Heat.of(perTick))))
+                    .append(Component.literal("  " + ReportText.share(r.total[i], r.tickNsTotal)).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(0xC8C8C8))).getVisualOrderText();
         }
         return cache[i];
     }
@@ -604,8 +603,8 @@ public final class Overlay {
 
     private static FormattedCharSequence chunkCost(ReportData r, int i) {
         long perTick = r.perTick(r.chunkTotal[i]);
-        return Component.literal(ReportText.time(perTick) + (r.frames ? "/f" : "/t")).withColor(Heat.rgb(Heat.of(perTick)))
-                .append(Component.literal("  " + ReportText.share(r.chunkTotal[i], r.tickNsTotal)).withColor(0xC8C8C8)).getVisualOrderText();
+        return Component.literal(ReportText.time(perTick) + (r.frames ? "/f" : "/t")).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(Heat.rgb(Heat.of(perTick))))
+                .append(Component.literal("  " + ReportText.share(r.chunkTotal[i], r.tickNsTotal)).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(0xC8C8C8))).getVisualOrderText();
     }
 
     /** A label facing the camera at (x, y, z), unless another is already too close to it seen from the camera. */
@@ -640,7 +639,7 @@ public final class Overlay {
         }
         LABEL.pushPose();
         LABEL.translate((float) dx, (float) dy, (float) dz);
-        LABEL.mulPose(FACING.rotation(facing));
+        LABEL.mulPose(facing);
         LABEL.scale(scale, -scale, scale);
         int bg = 0x99101216;
         labelLine(font, first, -font.width(first) / 2f, second == null ? 0 : -10, mode, bg);
@@ -686,7 +685,7 @@ public final class Overlay {
         READOUT.add(name(r, i));
         READOUT.add(costLine(r, total));
         READOUT.add(Component.translatableWithFallback("culprit.readout.thing", "worst tick %s, %s", ReportText.time(r.max[i]),
-                Names.mod(colon < 0 ? "minecraft" : type.substring(0, colon))).withColor(0xA8AFBA).getVisualOrderText());
+                Names.mod(colon < 0 ? "minecraft" : type.substring(0, colon))).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(0xA8AFBA)).getVisualOrderText());
         readoutWidth = 0;
         for (FormattedCharSequence line : READOUT) {
             readoutWidth = Math.max(readoutWidth, font.width(line));
@@ -696,11 +695,10 @@ public final class Overlay {
 
     private static FormattedCharSequence costLine(ReportData r, long total) {
         long perTick = r.perTick(total);
-        return Component.literal(ReportText.time(perTick)).withColor(Heat.rgb(Heat.of(perTick)))
+        return Component.literal(ReportText.time(perTick)).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(Heat.rgb(Heat.of(perTick))))
                 .append((r.frames ? Component.translatableWithFallback("culprit.readout.cost_frame", " a frame, %s of the frame",
                         ReportText.share(total, r.tickNsTotal))
-                        : Component.translatableWithFallback("culprit.readout.cost", " a tick, %s of the tick", ReportText.share(total, r.tickNsTotal)))
-                        .withColor(0xC8C8C8)).getVisualOrderText();
+                        : Component.translatableWithFallback("culprit.readout.cost", " a tick, %s of the tick", ReportText.share(total, r.tickNsTotal))).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(0xC8C8C8))).getVisualOrderText();
     }
 
     /**
@@ -732,9 +730,9 @@ public final class Overlay {
         PROJECTION.set(RenderSystem.getProjectionMatrix());
         sorting = RenderSystem.getVertexSorting();
         RenderSystem.setProjectionMatrix(event.getProjectionMatrix(), VertexSorting.DISTANCE_TO_ORIGIN);
-        Matrix4fStack modelView = RenderSystem.getModelViewStack();
-        modelView.pushMatrix();
-        modelView.mul(event.getModelViewMatrix());
+        PoseStack modelView = RenderSystem.getModelViewStack();
+        modelView.pushPose();
+        modelView.mulPoseMatrix(dev.culprit.legacy.CameraTurn.view(event.getCamera()));
         RenderSystem.applyModelViewMatrix();
         fogStart = RenderSystem.getShaderFogStart();
         FogRenderer.setupNoFog();
@@ -758,10 +756,10 @@ public final class Overlay {
         Matrix4f pose = LABEL.last().pose();
         float x1 = x + font.width(line) + 1;
         VertexConsumer b = buffers().getBuffer(mode == Font.DisplayMode.SEE_THROUGH ? BACKING_SEE_THROUGH : BACKING);
-        b.addVertex(pose, x - 1, y - 1, 0).setColor(backing);
-        b.addVertex(pose, x - 1, y + 9, 0).setColor(backing);
-        b.addVertex(pose, x1, y + 9, 0).setColor(backing);
-        b.addVertex(pose, x1, y - 1, 0).setColor(backing);
+        b.vertex(dev.culprit.legacy.Verts.matrix(pose), x - 1, y - 1, 0).color(backing).endVertex();
+        b.vertex(dev.culprit.legacy.Verts.matrix(pose), x - 1, y + 9, 0).color(backing).endVertex();
+        b.vertex(dev.culprit.legacy.Verts.matrix(pose), x1, y + 9, 0).color(backing).endVertex();
+        b.vertex(dev.culprit.legacy.Verts.matrix(pose), x1, y - 1, 0).color(backing).endVertex();
         font.drawInBatch(line, x, y, 0xFFFFFFFF, false, pose, buffers(), mode, 0, LightTexture.FULL_BRIGHT);
     }
 
@@ -773,7 +771,7 @@ public final class Overlay {
         try {
             buffers().endBatch();
         } finally {
-            RenderSystem.getModelViewStack().popMatrix();
+            RenderSystem.getModelViewStack().popPose();
             RenderSystem.applyModelViewMatrix();
             RenderSystem.setProjectionMatrix(PROJECTION, sorting);
             RenderSystem.setShaderFogStart(fogStart);
@@ -874,8 +872,8 @@ public final class Overlay {
         dx /= len;
         dy /= len;
         dz /= len;
-        b.addVertex(p, x0, y0, z0).setColor(c).setNormal(p, dx, dy, dz);
-        b.addVertex(p, x1, y1, z1).setColor(c).setNormal(p, dx, dy, dz);
+        b.vertex(dev.culprit.legacy.Verts.matrix(p), x0, y0, z0).color(c).normal(dev.culprit.legacy.Verts.normal(p), dx, dy, dz).endVertex();
+        b.vertex(dev.culprit.legacy.Verts.matrix(p), x1, y1, z1).color(c).normal(dev.culprit.legacy.Verts.normal(p), dx, dy, dz).endVertex();
     }
 
     private static void cube(VertexConsumer b, PoseStack.Pose p, float x0, float y0, float z0, float x1, float y1, float z1, int c) {
@@ -889,9 +887,9 @@ public final class Overlay {
 
     private static void quad(VertexConsumer b, PoseStack.Pose p, float ax, float ay, float az, float bx, float by, float bz,
                              float cx, float cy, float cz, float dx, float dy, float dz, int c) {
-        b.addVertex(p, ax, ay, az).setColor(c);
-        b.addVertex(p, bx, by, bz).setColor(c);
-        b.addVertex(p, cx, cy, cz).setColor(c);
-        b.addVertex(p, dx, dy, dz).setColor(c);
+        b.vertex(dev.culprit.legacy.Verts.matrix(p), ax, ay, az).color(c).endVertex();
+        b.vertex(dev.culprit.legacy.Verts.matrix(p), bx, by, bz).color(c).endVertex();
+        b.vertex(dev.culprit.legacy.Verts.matrix(p), cx, cy, cz).color(c).endVertex();
+        b.vertex(dev.culprit.legacy.Verts.matrix(p), dx, dy, dz).color(c).endVertex();
     }
 }

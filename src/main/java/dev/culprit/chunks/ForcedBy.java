@@ -48,8 +48,8 @@ public final class ForcedBy extends SavedData {
     public ForcedBy() {}
 
     @Override
-    public net.minecraft.nbt.CompoundTag save(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
-        return TYPE.save(this, tag, registries);
+    public net.minecraft.nbt.CompoundTag save(net.minecraft.nbt.CompoundTag tag) {
+        return TYPE.save(this, tag);
     }
 
     private ForcedBy(List<Entry> entries) {

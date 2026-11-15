@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.culprit.legacy.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "culprit.refmap.json",
+  "plugin": "dev.culprit.legacy.mixin.MixinPlugin",
+  "mixins": [
+    "BlockEntityTypeAccessor"
+  ],
+  "client": [
+    "DevWindowMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

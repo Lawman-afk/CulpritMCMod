@@ -5,12 +5,12 @@ import com.mojang.blaze3d.platform.InputConstants;
 import dev.culprit.Culprit;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.client.settings.KeyConflictContext;
-import net.neoforged.neoforge.common.NeoForge;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.client.settings.KeyConflictContext;
+import net.minecraftforge.common.MinecraftForge;
 
 /**
  * Culprit's keys, under "Culprit" in Controls: F8 opens the scan menu, F9 the results. Minecraft binds neither (its
@@ -36,7 +36,7 @@ public final class CulpritKeys {
             e.register(RESULTS);
             e.register(HUD);
         });
-        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ClientTickEvent e) -> {if (e.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
             Minecraft mc = Minecraft.getInstance();
             while (SCAN.consumeClick()) {
                 if (mc.screen == null && mc.player != null) {
@@ -52,6 +52,6 @@ public final class CulpritKeys {
                 }
             }
         });
-        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut e) -> ClientReport.clear());
+        MinecraftForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut e) -> ClientReport.clear());
     }
 }

@@ -15,7 +15,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.FormattedCharSequence;
-import net.neoforged.neoforge.network.PacketDistributor;
+import dev.culprit.legacy.net.PacketDistributor;
 
 /**
  * The scan menu (F8 by default): a scan of the server's ticks (what lags the server; it needs Culprit on the server,
@@ -88,7 +88,7 @@ public final class ScanScreen extends Screen {
 
     static boolean serverHasCulprit() {
         Minecraft mc = Minecraft.getInstance();
-        return mc.getConnection() != null && mc.getConnection().hasChannel(CulpritNetwork.ScanRequest.TYPE);
+        return mc.getConnection() != null && dev.culprit.legacy.client.ClientNet.serverHas(mc.getConnection());
     }
 
     @Override
@@ -116,15 +116,15 @@ public final class ScanScreen extends Screen {
         return false;
     }
 
-    @Override
     public void renderBackground(net.minecraft.client.gui.GuiGraphics gg_, int mouseX, int mouseY, float partial) { GuiGraphicsExtractor g = new GuiGraphicsExtractor(gg_);
-        super.renderBackground(g.unwrap(), mouseX, mouseY, partial);
+        super.renderBackground(g.unwrap());
         g.fill(left(), top(), left() + W, top() + H, PANEL);
         g.outline(left(), top(), W, H, EDGE);
     }
 
     @Override
     public void render(net.minecraft.client.gui.GuiGraphics gg_, int mouseX, int mouseY, float partial) { GuiGraphicsExtractor g = new GuiGraphicsExtractor(gg_);
+        this.renderBackground(g.unwrap(), mouseX, mouseY, partial);   // (1.20.1's Screen.render draws no background)
         super.render(g.unwrap(), mouseX, mouseY, partial);
         int x = left() + 12, y = top() + 10;
         g.text(this.font, this.title.copy().withStyle(ChatFormatting.BOLD), x, y, HEAD);
@@ -148,7 +148,7 @@ public final class ScanScreen extends Screen {
             float done = 1f - left / (float) seconds;
             int bx = left() + 12, bw = W - 24;
             g.fill(bx, y, bx + bw, y + 3, 0x40FFFFFF);
-            g.fill(bx, y, bx + Math.round(bw * Math.clamp(done, 0f, 1f)), y + 3, 0xFFFFC34D);
+            g.fill(bx, y, bx + Math.round(bw * dev.culprit.legacy.J21.clamp(done, 0f, 1f)), y + 3, 0xFFFFC34D);
         }
     }
 

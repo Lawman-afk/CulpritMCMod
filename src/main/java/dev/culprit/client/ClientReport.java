@@ -70,7 +70,7 @@ public final class ClientReport {
     /** Asks the server for a look at its loaded chunks (operators, as scans). */
     public static void requestChunks() {
         if (ScanScreen.serverHasCulprit()) {
-            net.neoforged.neoforge.network.PacketDistributor.sendToServer(new CulpritNetwork.ChunksRequest());
+            dev.culprit.legacy.net.PacketDistributor.sendToServer(new CulpritNetwork.ChunksRequest());
         }
     }
 
@@ -214,7 +214,7 @@ public final class ClientReport {
     /** "[Culprit] Done. The server tick took ... Costliest: ..." */
     private static Component finished(ReportData d) {
         long mean = d.perTick(d.tickNsTotal);
-        Component meanText = Component.literal(ReportText.time(mean)).withColor(Heat.rgb(Heat.of(d.frames ? mean / 4 : mean)));
+        Component meanText = Component.literal(ReportText.time(mean)).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(Heat.rgb(Heat.of(d.frames ? mean / 4 : mean))));
         MutableComponent line = tag().append((d.frames
                 ? Component.translatableWithFallback("culprit.chat.frames_done", "Done. A frame took %s on average (%s FPS) and %s at worst.",
                         meanText, mean <= 0 ? "-" : String.valueOf(Math.round(1e9 / mean)), ReportText.time(d.tickNsMax))
@@ -232,7 +232,7 @@ public final class ClientReport {
                     top.append(Component.literal(", ").withStyle(ChatFormatting.GRAY));
                 }
                 long perTick = d.perTick(d.typeTotal[i]);
-                top.append(Component.literal(typeName(d, i) + " ")).append(Component.literal(ReportText.time(perTick)).withColor(Heat.rgb(Heat.of(perTick))));
+                top.append(Component.literal(typeName(d, i) + " ")).append(Component.literal(ReportText.time(perTick)).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(Heat.rgb(Heat.of(perTick)))));
             }
             line.append(" ").append(Component.translatableWithFallback("culprit.chat.costliest", "Costliest: %s.", top).withStyle(ChatFormatting.WHITE));
         }

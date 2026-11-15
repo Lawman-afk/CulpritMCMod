@@ -90,7 +90,7 @@ public final class ChunkData {
             d.dim = buf.readUtf(256);
             d.edges = buf.readVarInt();
             d.total = buf.readVarInt();
-            d.chunks = Math.clamp(buf.readVarInt(), 0, budget);
+            d.chunks = dev.culprit.legacy.J21.clamp(buf.readVarInt(), 0, budget);
             budget -= d.chunks;
             d.x = new int[d.chunks];
             d.z = new int[d.chunks];
@@ -110,7 +110,7 @@ public final class ChunkData {
                 d.blockEntities[i] = buf.readVarInt();
                 d.entities[i] = buf.readVarInt();
             }
-            d.sources = Math.clamp(buf.readVarInt(), 0, 100_000);
+            d.sources = dev.culprit.legacy.J21.clamp(buf.readVarInt(), 0, 100_000);
             d.sx = new int[d.sources];
             d.sz = new int[d.sources];
             d.slevel = new int[d.sources];

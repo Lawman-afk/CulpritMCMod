@@ -1,0 +1,31 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="${mod_license}"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+authors="${mod_authors}"
+# Either side may be without Culprit (its frame scan needs no server side; a server with it takes players without it):
+# the server list shows no mismatch for it.
+displayTest="IGNORE_ALL_VERSION"
+description='''
+${mod_description}
+'''
+
+# Forge 1.20.1 finds the mixins through the jar's manifest (build.gradle), not here.
+
+[[dependencies.${mod_id}]]
+    modId="forge"
+    mandatory=true
+    versionRange="${forge_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"

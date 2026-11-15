@@ -6,8 +6,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 import dev.culprit.Culprit;
-import net.neoforged.fml.ModList;
-import net.neoforged.neoforgespi.language.IModFileInfo;
+import net.minecraftforge.fml.ModList;
+import net.minecraftforge.forgespi.language.IModFileInfo;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -34,7 +34,7 @@ final class Callers {
             if (name.startsWith("dev.culprit.chunks.") || wayThrough.test(name) || isLibrary(name)) {
                 continue;
             }
-            if (name.startsWith("net.minecraft.") || name.startsWith("net.neoforged.") || name.startsWith("com.mojang.")) {
+            if (name.startsWith("net.minecraft.") || name.startsWith("net.minecraftforge.") || name.startsWith("cpw.mods.") || name.startsWith("com.mojang.")) {
                 if (game == null) {
                     game = name.substring(name.lastIndexOf('.') + 1);
                 }
@@ -70,7 +70,7 @@ final class Callers {
             try {
                 for (IModFileInfo file : ModList.get().getModFiles()) {
                     if (!file.getMods().isEmpty() && java.nio.file.Files.exists(file.getFile().findResource(path))) {
-                        return file.getMods().getFirst().getModId();
+                        return dev.culprit.legacy.J21.first(file.getMods()).getModId();
                     }
                 }
             } catch (RuntimeException | LinkageError e) {

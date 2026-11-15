@@ -91,8 +91,8 @@ public final class CulpritScreen extends Screen {
 
     /** Which list the screen shows next (and now, if it is open). */
     public static void showTab(int index) {
-        tab = Math.clamp(index, 0, TABS.length - 1);
-        if (Minecraft.getInstance().screen instanceof CulpritScreen open) {
+        tab = dev.culprit.legacy.J21.clamp(index, 0, TABS.length - 1);
+        if (((Object) Minecraft.getInstance().screen) instanceof CulpritScreen open) {
             open.scroll = 0;
             open.picked = -1;
             open.refreshTabs();
@@ -115,7 +115,7 @@ public final class CulpritScreen extends Screen {
         layoutChunks = ClientReport.chunksShown();
         layoutChunkData = ClientReport.chunksData();
         ReportData d = ClientReport.view();
-        summaryLines = Math.clamp(this.font.split(layoutChunks ? chunksHeadline() : headline(layoutData, d), inner).size(), 1, 3);
+        summaryLines = dev.culprit.legacy.J21.clamp(this.font.split(layoutChunks ? chunksHeadline() : headline(layoutData, d), inner).size(), 1, 3);
         barY = top + 20 + summaryLines * 10 + 2;
         int tabsY = barY + VIEW_H + 5;
         listTop = tabsY + 21;
@@ -136,16 +136,19 @@ public final class CulpritScreen extends Screen {
         // Every tick or only the lag spikes (frames: the stutters): a tick box at the bar's end, apart from the tabs, as it
         // changes what the headline, the bar and every tab cover.
         Component viewText = viewLabel(layoutData);
-        int viewW = Checkbox.getBoxSize(this.font) + 4 + this.font.width(viewText);
+        int viewW = 20 + 4 + this.font.width(viewText);
         barW = layoutChunks ? inner : inner - viewW - 10;
-        Checkbox viewSwitch = addRenderableWidget(Checkbox.builder(viewText, this.font).pos(right - 8 - viewW, barY).selected(layoutSpikes)
-                .tooltip(Tooltip.create(layoutFrames ? tr("view.about_frames2", "Ticked: only the stutters, the frames that took over twice the usual frame (and at least 20 ms), to find what makes them slow. Not ticked: every frame of the scan, on average.")
-                        : tr("view.about2", "Ticked: only the lag spikes, the ticks that took over twice the usual tick (and at least 5 ms), to find what makes them slow. Not ticked: every tick of the scan, on average.")))
-                .onValueChange((box, on) -> {
-                    ClientReport.showSpikes(on);
+        Checkbox viewSwitch = addRenderableWidget(new Checkbox(right - 8 - viewW, barY - 2, viewW, 20, viewText, layoutSpikes) {
+            @Override
+            public void onPress() {
+                super.onPress();
+                    ClientReport.showSpikes(this.selected());
                     scroll = 0;
                     picked = -1;
-                }).build());
+            }
+        });
+        viewSwitch.setTooltip(Tooltip.create(layoutFrames ? tr("view.about_frames2", "Ticked: only the stutters, the frames that took over twice the usual frame (and at least 20 ms), to find what makes them slow. Not ticked: every frame of the scan, on average.")
+                        : tr("view.about2", "Ticked: only the lag spikes, the ticks that took over twice the usual tick (and at least 5 ms), to find what makes them slow. Not ticked: every tick of the scan, on average.")));
         viewSwitch.visible = !layoutChunks && layoutData != null;
         // Server ticks / Frames / Loaded chunks, after the title.
         int sx = left + 8 + this.font.width(this.title.copy().withStyle(ChatFormatting.BOLD)) + 8;
@@ -169,7 +172,7 @@ public final class CulpritScreen extends Screen {
         Component settingsText = tr("settings", "Settings");
         int settingsW = this.font.width(settingsText) + 10;
         int settingsX = right - 8 - settingsW;
-        int searchW = Math.clamp(inner / 4, 80, 160);
+        int searchW = dev.culprit.legacy.J21.clamp(inner / 4, 80, 160);
         searchLeft = settingsX - 6 - searchW;
         if (searchLeft < sectionRight + 4) {
             searchW = Math.max(56, searchW - (sectionRight + 4 - searchLeft));
@@ -278,9 +281,8 @@ public final class CulpritScreen extends Screen {
         return false;
     }
 
-    @Override
     public void renderBackground(net.minecraft.client.gui.GuiGraphics gg_, int mouseX, int mouseY, float partial) { GuiGraphicsExtractor g = new GuiGraphicsExtractor(gg_);
-        super.renderBackground(g.unwrap(), mouseX, mouseY, partial);
+        super.renderBackground(g.unwrap());
         g.fill(left, top, right, bottom, PANEL);
         g.outline(left, top, right - left, bottom - top, EDGE);
         g.fill(left + 4, listTop - 1, right - 4, listBottom + 1, 0x40000000);
@@ -288,6 +290,7 @@ public final class CulpritScreen extends Screen {
 
     @Override
     public void render(net.minecraft.client.gui.GuiGraphics gg_, int mouseX, int mouseY, float partial) { GuiGraphicsExtractor g = new GuiGraphicsExtractor(gg_);
+        this.renderBackground(g.unwrap(), mouseX, mouseY, partial);   // (1.20.1's Screen.render draws no background)
         super.render(g.unwrap(), mouseX, mouseY, partial);
         g.text(this.font, this.title.copy().withStyle(ChatFormatting.BOLD), left + 8, top + 6, HEAD);
         ReportData all = ClientReport.base();
@@ -380,7 +383,7 @@ public final class CulpritScreen extends Screen {
     }
 
     private static Component summary(ReportData d) {
-        return summaryText(Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal)))),
+        return summaryText(Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal))))),
                 ReportText.time(d.tickNsMax), d.ticks);
     }
 
@@ -401,7 +404,7 @@ public final class CulpritScreen extends Screen {
         }
         return tr("spikes_summary", "%s lag spikes: ticks over %s (twice the usual %s, and at least 5 ms). In them the tick took %s on average and %s at worst. Below, what each part took in them.",
                 d.ticks, ReportText.time(all.spikeThresholdNs), ReportText.time(all.medianTickNs),
-                Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal)))),
+                Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal))))),
                 ReportText.time(d.tickNsMax));
     }
 
@@ -410,7 +413,7 @@ public final class CulpritScreen extends Screen {
         if (!ClientReport.spikesShown()) {
             long mean = all.perTick(all.tickNsTotal);
             return tr("frames_summary", "A frame took %s on average (%s FPS) and %s at worst over %s frames. Below, all of it: what each part took.",
-                    Component.literal(ReportText.time(mean)).withColor(Heat.rgb(Heat.of(mean / 4))), mean <= 0 ? "-" : String.valueOf(Math.round(1e9 / mean)),
+                    Component.literal(ReportText.time(mean)).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(Heat.rgb(Heat.of(mean / 4)))), mean <= 0 ? "-" : String.valueOf(Math.round(1e9 / mean)),
                     ReportText.time(all.tickNsMax), all.ticks);
         }
         if (d == null) {
@@ -419,7 +422,7 @@ public final class CulpritScreen extends Screen {
         }
         return tr("stutters_summary", "%s stutters: frames over %s (twice the usual %s, and at least 20 ms). In them a frame took %s on average and %s at worst. Below, what each part took in them.",
                 d.ticks, ReportText.time(all.spikeThresholdNs), ReportText.time(all.medianTickNs),
-                Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal) / 4))),
+                Component.literal(ReportText.time(d.perTick(d.tickNsTotal))).withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(Heat.rgb(Heat.of(d.perTick(d.tickNsTotal) / 4)))),
                 ReportText.time(d.tickNsMax));
     }
 
@@ -431,11 +434,7 @@ public final class CulpritScreen extends Screen {
 
     /** The player's settings, NeoForge's page for Culprit's client file, back to {@code parent} when done; null if none. */
     public static @Nullable Screen settings(Screen parent) {
-        return net.neoforged.fml.config.ModConfigs.getModConfigs(dev.culprit.Culprit.MODID).stream()
-                .filter(c -> c.getType() == net.neoforged.fml.config.ModConfig.Type.CLIENT).findFirst()
-                .<Screen>map(c -> new net.neoforged.neoforge.client.gui.ConfigurationScreen.ConfigurationSectionScreen(parent, c.getType(), c,
-                        tr("settings.title", "Culprit: your settings")))
-                .orElse(null);
+        return new dev.culprit.legacy.client.SettingsScreen(parent);
     }
 
     private static Component sectionLabel(int section) {
@@ -592,7 +591,7 @@ public final class CulpritScreen extends Screen {
         int[] found = visible(d);
         int n = found.length;
         int rows = visibleRows();
-        scroll = Math.clamp(scroll, 0, Math.max(0, n - rows));
+        scroll = dev.culprit.legacy.J21.clamp(scroll, 0, Math.max(0, n - rows));
         if (n == 0 && !query.isBlank()) {
             g.text(this.font, tr("none_found", "Nothing in this list matches \"%s\".", query), cName, listTop + ROW + 2, DIM);
         }
@@ -839,7 +838,7 @@ public final class CulpritScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double x, double y, double scrollY) { double scrollX = 0;
         if (ClientReport.chunksShown() && panel.scroll(x, y, scrollY)) {
             return true;
         }
@@ -847,7 +846,7 @@ public final class CulpritScreen extends Screen {
             scroll -= (int) Math.signum(scrollY) * 3;
             return true;
         }
-        return super.mouseScrolled(x, y, scrollX, scrollY);
+        return super.mouseScrolled(x, y, scrollY);
     }
 
     @Override
