@@ -216,7 +216,10 @@ def member_span(text: str, marker: str) -> tuple[int, int]:
     line_start = text.rfind("\n", 0, i) + 1
     prev = max(text.rfind("}\n", 0, line_start), text.rfind(";\n", 0, line_start), text.rfind("{\n", 0, line_start))
     start = prev + 2
-    depth, j = 0, text.index("{", i)
+    semi, brace = text.find(";", i), text.find("{", i)
+    if semi != -1 and (brace == -1 or semi < brace):
+        return start, semi + 1                              # a field: its declaration ends at the semicolon
+    depth, j = 0, brace
     while j < len(text):
         if text[j] == "{":
             depth += 1

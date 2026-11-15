@@ -3,7 +3,8 @@
 Main is written for Minecraft 26.3 (NeoForge 26.3). This branch is the same mod for Minecraft 26.1.2 (NeoForge
 26.1.2.126, Java 25), made from main's sources by a tool, not kept by hand.
 
-- **Last brought up to:** `main` at `23f70eeb` (2026-11-15: the chunk inspector names every kind of loader, passing
+- **Last brought up to:** `main` at `22c7c560` (2026-11-15: light updates timed as their own part of the frame, 44 µs
+  of the Lab's here; synced cleanly); before it, at `23f70eeb` (the chunk inspector names every kind of loader, passing
   requests by the code that asked; the frame scan with Sodium, Iris's shadow pass and Distant Horizons; settings, the
   HUD line, reports as files; the lag spikes tick box).
 
@@ -39,7 +40,8 @@ errors with `gradlew compileJava` and `python tools\backport\errs.py <log>`.
 
 ## Checks
 
-- `gradlew runGameTestServer`: main's GameTests (9 at `23f70eeb`, all pass).
+- `gradlew runGameTestServer`: main's GameTests (9 at `22c7c560`, all pass). Read the log's "All 9 required tests
+  passed": a server that fails to start still ends the task without an error.
 - `gradlew runLab`, with `-PwithIris` (Iris 1.11.4, Sodium, Complementary) and `-PwithDH` (Distant Horizons): every
   frame part timed but the two above; the results on the world and the screens as main's. The dev runs' draw check is
   `neoforge.disableGlValidation` here (main's `neoforge.disableBlaze3DValidation`).
