@@ -13,9 +13,15 @@ Examples:
 
 Each is drawn four times over and smoothed down to 1024 px, then 400.
 
-Usage: <Ground Burst's tools/.venv>\\Scripts\\python.exe tools\\branding\\logos_flat.py [--out <folder>] [--choose <name>]
-Writes logo_<name>.png (400) and logo_<name>_1024.png into the folder (default build/branding/flat) and a sheet of
-them at 400, 128 and 48 px beside it; --choose <name> also writes that one as docs/branding/logo.png.
+The user chose "line, hot box" (2026-11-15, from the second round, `--set more`): the white glass, the dark lens, the box
+inside it as lines in the cost scale. It is the mod's logo (docs/branding/logo.png), and its symbol alone on
+transparency is docs/branding/icon.png:   logos_flat.py --set more --choose "line, hot box"
+
+Usage: <Ground Burst's tools/.venv>\\Scripts\\python.exe tools\\branding\\logos_flat.py [--set first|more] [--out <folder>]
+       [--choose <name>]
+Writes logo_<name>.png (400) and logo_<name>_1024.png into the folder (default build/branding/flat, or flat_more) and a
+sheet of them at 400, 128 and 48 px beside it; --choose <name> also writes that one as docs/branding/logo.png (and, for
+"line, hot box", its symbol as docs/branding/icon.png).
 """
 import argparse
 import math
@@ -243,6 +249,14 @@ def examples() -> dict:
     return out
 
 
+def line_hot_box() -> Image.Image:
+    """The chosen logo's symbol (the user's pick, "line, hot box"): the white glass, the dark lens, the box inside it as
+    lines in the cost scale, at four times the size."""
+    g = glass(WHITE, WHITE, LENS)
+    g.alpha_composite(heat_fill(cube_lines_mask(*C, BOX, 0.024), "diagonal", BOX * 1.1))
+    return g
+
+
 def more_examples() -> dict:
     """The second round, round the two the user liked best ("I really like line and hot"): the first two again to
     compare, then their variations."""
@@ -271,10 +285,8 @@ def more_examples() -> dict:
     g = glass(WHITE, WHITE, LENS, ring_layer=heat_fill(Image.new("L", (M, M), 255)))
     g.alpha_composite(cube_lines(*C, BOX, WHITE, lines))
     out["hot ring"] = compose(ground_flat(), g)
-    # Line: the box's lines in the scale, the rest white on the dark.
-    g = glass(WHITE, WHITE, LENS)
-    g.alpha_composite(heat_fill(cube_lines_mask(*C, BOX, lines), "diagonal", BOX * 1.1))
-    out["line, hot box"] = compose(ground_flat(), g)
+    # Line: the box's lines in the scale, the rest white on the dark (the user's pick).
+    out["line, hot box"] = compose(ground_flat(), line_hot_box())
     # Line: the dark lens lit by the box from inside, as a culprit glows on the world.
     g = glass(WHITE, WHITE, LENS)
     g.alpha_composite(glow(S.HEAT[4], 0.16, 0.85))
@@ -304,6 +316,15 @@ def main():
     if args.choose:
         logos[args.choose].resize((400, 400), Image.LANCZOS).convert("RGB").save(L.LOGO, optimize=True)
         print("chose", args.choose, "as", L.LOGO)
+        if args.choose == "line, hot box":
+            # The symbol alone on transparency, centred (on the logo the glass sits up and to the right).
+            sym = down(line_hot_box())
+            cut = sym.crop(sym.getbbox())
+            side = max(cut.size) + 48
+            icon = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+            icon.alpha_composite(cut, ((side - cut.width) // 2, (side - cut.height) // 2))
+            icon.resize((512, 512), Image.LANCZOS).save(L.ICON, optimize=True)
+            print("its symbol as", L.ICON)
     print("wrote", ", ".join(logos), "to", out)
 
 
