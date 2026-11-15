@@ -1,9 +1,10 @@
 <p align="center">
-  <img src="docs/branding/banner.jpg" alt="Culprit: find what is lagging your game. A plains village under Culprit's boxes, each coloured by what it costs the server">
+  <img src="docs/branding/banner.jpg" alt="Culprit: find what is lagging your game. A plains village at sunset under its results, each thing and chunk labelled with what it costs the server">
 </p>
 
 <p align="center">
-  A Minecraft mod for NeoForge 26.3, 26.1.2 and 1.21.1, and Forge 1.20.1
+  A Minecraft mod for NeoForge 26.3, 26.1.2 and 1.21.1, and Forge 1.20.1 ·
+  <a href="https://www.curseforge.com/minecraft/mc-mods/culprit">Download on CurseForge</a>
 </p>
 
 Scan your server for a few seconds and see, on the world itself, what every villager, hopper, furnace and farm costs it
