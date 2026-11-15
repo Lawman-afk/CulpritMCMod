@@ -7,7 +7,7 @@ import java.util.Map;
 import dev.culprit.scan.Kind;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.material.Fluid;
@@ -56,27 +56,27 @@ public final class Names {
         if (type.equals("minecraft:mob_spawning")) {
             return capital(Component.translatableWithFallback("culprit.kind.one.spawning", "mob spawning").getString());
         }
-        Identifier id = Identifier.tryParse(type);
+        ResourceLocation id = ResourceLocation.tryParse(type);
         if (id != null) {
             if ((kind == Kind.ENTITY || kind < 0) && BuiltInRegistries.ENTITY_TYPE.containsKey(id)) {
-                return BuiltInRegistries.ENTITY_TYPE.getValue(id).getDescription().getString();
+                return BuiltInRegistries.ENTITY_TYPE.get(id).getDescription().getString();
             }
             if (kind == Kind.BLOCK_ENTITY && BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(id)) {
                 // Its own block's name when it has one by the same id (a hopper's), else the first block it sits in.
-                BlockEntityType<?> blockEntity = BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(id);
+                BlockEntityType<?> blockEntity = BuiltInRegistries.BLOCK_ENTITY_TYPE.get(id);
                 if (!BuiltInRegistries.BLOCK.containsKey(id) && blockEntity != null && !blockEntity.getValidBlocks().isEmpty()) {
                     return blockEntity.getValidBlocks().stream().min(java.util.Comparator.comparing(b -> BuiltInRegistries.BLOCK.getKey(b).toString()))
                             .map(b -> b.getName().getString()).orElse(pretty(type));
                 }
             }
             if (kind != Kind.ENTITY && BuiltInRegistries.BLOCK.containsKey(id)) {
-                Block block = BuiltInRegistries.BLOCK.getValue(id);
+                Block block = BuiltInRegistries.BLOCK.get(id);
                 if (block != null) {
                     return block.getName().getString();
                 }
             }
             if (kind != Kind.ENTITY && BuiltInRegistries.FLUID.containsKey(id)) {
-                Fluid fluid = BuiltInRegistries.FLUID.getValue(id);
+                Fluid fluid = BuiltInRegistries.FLUID.get(id);
                 if (fluid != null) {
                     return fluid.getFluidType().getDescription().getString();
                 }

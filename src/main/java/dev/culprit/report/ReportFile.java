@@ -17,7 +17,7 @@ import dev.culprit.command.ReportText;
 import dev.culprit.net.ReportData;
 import dev.culprit.scan.Kind;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * A scan's report as files to share with a pack's makers or a server's staff (DESIGN §4.4): a Markdown page to read
@@ -229,7 +229,7 @@ public final class ReportFile {
     }
 
     private static String namespace(String type) {
-        Identifier id = Identifier.tryParse(type);
+        ResourceLocation id = ResourceLocation.tryParse(type);
         return id == null ? "minecraft" : id.getNamespace();
     }
 

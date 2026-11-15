@@ -24,7 +24,7 @@ abstract class PassingRequestMixin {
             at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerChunkCache;runDistanceManagerUpdates()Z"))
     private void culprit$whoAsks(int x, int z, ChunkStatus status, boolean load, CallbackInfoReturnable<CompletableFuture<ChunkResult<ChunkAccess>>> cir) {
         if (status == ChunkStatus.FULL) {
-            PassingRequests.loading(((ServerChunkCache) (Object) this).level, ChunkPos.pack(x, z));
+            PassingRequests.loading(((ServerChunkCache) (Object) this).level, ChunkPos.asLong(x, z));
         }
     }
 }

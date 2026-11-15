@@ -7,9 +7,9 @@ import dev.culprit.net.CulpritNetwork;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.culprit.port.GuiGraphicsExtractor;
 import net.minecraft.client.server.IntegratedServer;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * The HUD line (DESIGN §4.5): the server's ticks a second and time a tick, and the client's frames a second and time a
@@ -50,7 +50,7 @@ public final class HudLine {
             return;
         }
         if (want != asked && connection.hasChannel(CulpritNetwork.LoadRequest.TYPE)) {
-            ClientPacketDistributor.sendToServer(new CulpritNetwork.LoadRequest(want));
+            PacketDistributor.sendToServer(new CulpritNetwork.LoadRequest(want));
             asked = want;
         }
     }
@@ -69,7 +69,7 @@ public final class HudLine {
 
     public static void draw(GuiGraphicsExtractor g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
-        if (!CulpritClientConfig.hudLine() || mc.level == null || mc.gui.hud.isHidden() || mc.getDebugOverlay().showDebugScreen()) {
+        if (!CulpritClientConfig.hudLine() || mc.level == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()) {
             return;
         }
         Font font = mc.font;

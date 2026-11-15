@@ -193,7 +193,7 @@ public final class ScanReport {
             BlockPos p = th.blockPos();
             int cx = p.getX() >> 4;
             int cz = p.getZ() >> 4;
-            String chunkKey = th.level().identifier() + "|" + cx + "|" + cz;
+            String chunkKey = th.level().location() + "|" + cx + "|" + cz;
             chunkSums.computeIfAbsent(chunkKey, k -> new ChunkAcc(th.level(), cx, cz)).add(th);
         }
         List<Group> types = new ArrayList<>();

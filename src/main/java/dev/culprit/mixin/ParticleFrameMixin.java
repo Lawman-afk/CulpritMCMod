@@ -8,13 +8,13 @@ import dev.culprit.scan.ParticleInfo;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.Particle;
-import net.minecraft.client.particle.ParticleGroup;
+import net.minecraft.client.particle.ParticleEngine;
 import org.spongepowered.asm.mixin.Mixin;
 
 /** A particle moved (its tick), timed during a frame scan and charged to its kind in its chunk. */
-@Mixin(ParticleGroup.class)
+@Mixin(ParticleEngine.class)
 abstract class ParticleFrameMixin {
-    @WrapMethod(require = 0, method = "tickParticle")
+    @WrapMethod(require = 0, method = "tickParticle(Lnet/minecraft/client/particle/Particle;)V")
     private void culprit$tick(Particle particle, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(particle);

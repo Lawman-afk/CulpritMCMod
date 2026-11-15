@@ -18,15 +18,15 @@ import dev.culprit.scan.Kind;
 import dev.culprit.scan.Phase;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.culprit.port.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.CharacterEvent;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
+import dev.culprit.port.input.CharacterEvent;
+import dev.culprit.port.input.KeyEvent;
+import dev.culprit.port.input.MouseButtonEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -92,7 +92,7 @@ public final class CulpritScreen extends Screen {
     /** Which list the screen shows next (and now, if it is open). */
     public static void showTab(int index) {
         tab = Math.clamp(index, 0, TABS.length - 1);
-        if (Minecraft.getInstance().gui.screen() instanceof CulpritScreen open) {
+        if (Minecraft.getInstance().screen instanceof CulpritScreen open) {
             open.scroll = 0;
             open.picked = -1;
             open.refreshTabs();
@@ -178,7 +178,7 @@ public final class CulpritScreen extends Screen {
         addRenderableWidget(Button.builder(settingsText, b -> {
             Screen settings = settings(this);
             if (settings != null) {
-                Minecraft.getInstance().gui.setScreen(settings);
+                Minecraft.getInstance().setScreen(settings);
             }
         }).bounds(settingsX, top + 3, settingsW, 14).tooltip(Tooltip.create(tr("settings.about",
                 "How the results show on the world, and the HUD line."))).build());
@@ -225,7 +225,7 @@ public final class CulpritScreen extends Screen {
                 if (ClientReport.chunksShown()) {
                     ClientReport.requestChunks();
                 } else {
-                    Minecraft.getInstance().gui.setScreen(new ScanScreen());
+                    Minecraft.getInstance().setScreen(new ScanScreen());
                 }
             }
             case 1 -> {
@@ -279,16 +279,16 @@ public final class CulpritScreen extends Screen {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
-        super.extractBackground(g, mouseX, mouseY, partial);
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics gg_, int mouseX, int mouseY, float partial) { GuiGraphicsExtractor g = new GuiGraphicsExtractor(gg_);
+        super.renderBackground(g.unwrap(), mouseX, mouseY, partial);
         g.fill(left, top, right, bottom, PANEL);
         g.outline(left, top, right - left, bottom - top, EDGE);
         g.fill(left + 4, listTop - 1, right - 4, listBottom + 1, 0x40000000);
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
-        super.extractRenderState(g, mouseX, mouseY, partial);
+    public void render(net.minecraft.client.gui.GuiGraphics gg_, int mouseX, int mouseY, float partial) { GuiGraphicsExtractor g = new GuiGraphicsExtractor(gg_);
+        super.render(g.unwrap(), mouseX, mouseY, partial);
         g.text(this.font, this.title.copy().withStyle(ChatFormatting.BOLD), left + 8, top + 6, HEAD);
         ReportData all = ClientReport.base();
         ReportData d = ClientReport.view();
@@ -548,7 +548,7 @@ public final class CulpritScreen extends Screen {
 
     private static String here() {
         Minecraft mc = Minecraft.getInstance();
-        return mc.level == null ? "" : mc.level.dimension().identifier().toString();
+        return mc.level == null ? "" : mc.level.dimension().location().toString();
     }
 
     private void rows(GuiGraphicsExtractor g, ReportData d, int mouseX, int mouseY) {
@@ -668,7 +668,7 @@ public final class CulpritScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(KeyEvent event) {
+    public boolean keyPressed(int key_, int scancode_, int modifiers_) { KeyEvent event = new KeyEvent(key_, scancode_, modifiers_);
         // Enter in the search box picks the first line found (marked, ready to teleport to).
         if (search != null && search.isFocused() && event.isConfirmation()) {
             ReportData d = ClientReport.view();
@@ -681,17 +681,17 @@ public final class CulpritScreen extends Screen {
             }
             return true;
         }
-        return super.keyPressed(event);
+        return super.keyPressed(event.key(), event.scancode(), event.modifiers());
     }
 
     @Override
-    public boolean charTyped(CharacterEvent event) {
+    public boolean charTyped(char char_, int modifiers_) { CharacterEvent event = new CharacterEvent(char_, modifiers_);
         // Typing anywhere searches: the box takes the first letter and keeps the rest (its hint stays seen until then).
         if (search != null && !search.isFocused() && event.isAllowedChatCharacter() && !Character.isWhitespace(event.codepoint())) {
             setFocused(search);
-            return search.charTyped(event);
+            return search.charTyped(event.character(), event.modifiers());
         }
-        return super.charTyped(event);
+        return super.charTyped(event.character(), event.modifiers());
     }
 
     /** Fills the search box as a player would (the Lab's pictures). */
@@ -828,7 +828,7 @@ public final class CulpritScreen extends Screen {
     private static BlockPos surface(int x, int z, String dim) {
         Minecraft mc = Minecraft.getInstance();
         int y = mc.player == null ? 64 : (int) Math.floor(mc.player.getY());
-        if (mc.level != null && mc.level.dimension().identifier().toString().equals(dim) && mc.level.hasChunk(x >> 4, z >> 4)) {
+        if (mc.level != null && mc.level.dimension().location().toString().equals(dim) && mc.level.hasChunk(x >> 4, z >> 4)) {
             y = mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) - 1;
         }
         return new BlockPos(x, y, z);
@@ -851,7 +851,7 @@ public final class CulpritScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+    public boolean mouseClicked(double mouseX_, double mouseY_, int button_) { MouseButtonEvent event = new MouseButtonEvent(mouseX_, mouseY_, button_); boolean doubleClick = false;
         if (ClientReport.chunksShown() && event.button() == 0 && panel.click(event.x(), event.y())) {
             tick();
             return true;
@@ -865,7 +865,7 @@ public final class CulpritScreen extends Screen {
                 return true;
             }
         }
-        return super.mouseClicked(event, doubleClick);
+        return super.mouseClicked(event.x(), event.y(), event.button());
     }
 
     /** Whether the picked line has a place to mark and teleport to. */
@@ -912,7 +912,7 @@ public final class CulpritScreen extends Screen {
         if (ClientReport.chunksShown()) {
             ChunksPanel.Group loader = panel.picked();
             if (loader != null && mc.getConnection() != null && mc.level != null) {
-                String here = mc.level.dimension().identifier().toString();
+                String here = mc.level.dimension().location().toString();
                 BlockPos at = surface((loader.sx() << 4) + 8, (loader.sz() << 4) + 8, here);
                 mc.getConnection().sendCommand("execute in " + here + " run tp @s " + (at.getX() + 0.5) + " " + (at.getY() + 1) + " " + (at.getZ() + 0.5));
             }

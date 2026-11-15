@@ -7,7 +7,7 @@ import com.mojang.logging.LogUtils;
 import dev.culprit.command.CulpritCommand;
 import dev.culprit.net.CulpritNetwork;
 import dev.culprit.scan.TickScan;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -24,14 +24,14 @@ public class Culprit {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public Culprit(IEventBus modBus, ModContainer modContainer) {
-        modContainer.registerConfig(ModConfig.Type.SYNCED, dev.culprit.config.CulpritServerConfig.SPEC);
+        modContainer.registerConfig(ModConfig.Type.SERVER, dev.culprit.config.CulpritServerConfig.SPEC);
         TickScan.register();
         CulpritCommand.register();
         CulpritNetwork.register(modBus);
         dev.culprit.net.LoadSender.register();             // the HUD line's numbers, for players who ask
     }
 
-    public static Identifier id(String path) {
-        return Identifier.fromNamespaceAndPath(MODID, path);
+    public static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath(MODID, path);
     }
 }

@@ -35,7 +35,7 @@ public final class CulpritCommand {
                             .executes(c -> top(c, what, IntegerArgumentType.getInteger(c, "count")))));
         }
         dispatcher.register(Commands.literal("culprit")
-                .requires(source -> dev.culprit.config.CulpritServerConfig.mayScan(source.permissions()))
+                .requires(source -> dev.culprit.config.CulpritServerConfig.mayScan(source))
                 .then(Commands.literal("scan").executes(c -> scan(c, DEFAULT_SECONDS))
                         .then(Commands.argument("seconds", IntegerArgumentType.integer(5, 600))
                                 .executes(c -> scan(c, IntegerArgumentType.getInteger(c, "seconds")))))

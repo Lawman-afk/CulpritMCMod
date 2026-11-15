@@ -3,26 +3,24 @@ package dev.culprit.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.renderpearl.api.commands.CommandEncoder;
-import com.mojang.renderpearl.api.device.GpuSurface;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.platform.Window;
 
-import dev.culprit.scan.FrameProbe;
 import dev.culprit.scan.FramePhase;
+import dev.culprit.scan.FrameProbe;
 import dev.culprit.scan.FrameScan;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.PacketProcessor;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * The frame loop, timed during a frame scan (DESIGN §4.2): each frame from its start to its end, and its parts outside
- * the world's drawing: the client's ticks, the packets and queued tasks, showing the frame (waiting for the GPU or the
- * screen) and the frame-rate limit's wait (mods' frame events are timed by listeners, client/FrameEvents). The frame's
- * start and end are plain injections round {@code runTick}; its drawing half is {@code renderFrame} (called from it),
- * where the hand-over to the GPU, the showing and the limit's wait are. While no frame scan is armed, one boolean read a
- * frame.
+ * The frame loop, timed during a frame scan (DESIGN §4.2), 1.21.1's way (this branch's own, manual.txt): each frame
+ * from its start to its end round {@code runTick}, and its parts outside the world's drawing: the client's ticks, the
+ * queued tasks and packets, showing the frame (the screen cleared for it, the frame copied to the window and the
+ * window's buffers swapped, where the wait for the GPU and the screen falls) and the frame-rate limit's wait (mods' frame
+ * events are timed by listeners, client/FrameEvents). While no frame scan is armed, one boolean read a frame.
  */
 @Mixin(Minecraft.class)
 abstract class MinecraftFrameMixin {
@@ -54,20 +52,6 @@ abstract class MinecraftFrameMixin {
         }
     }
 
-    @WrapOperation(require = 0, method = "runTick(Z)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/PacketProcessor;processQueuedPackets()V"))
-    private void culprit$packets(PacketProcessor processor, Operation<Void> original) {
-        if (!FrameProbe.measuring()) {
-            original.call(processor);
-            return;
-        }
-        long start = FrameProbe.begin();
-        try {
-            original.call(processor);
-        } finally {
-            FrameProbe.phase(FramePhase.PACKETS, FrameProbe.end(start));
-        }
-    }
-
     @WrapOperation(require = 0, method = "runTick(Z)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;runAllTasks()V"))
     private void culprit$tasks(Minecraft self, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
@@ -82,84 +66,49 @@ abstract class MinecraftFrameMixin {
         }
     }
 
-    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/commands/CommandEncoder;submit()V"))
-    private void culprit$submitToGpu(CommandEncoder encoder, Operation<Void> original) {
+    @WrapOperation(require = 0, method = "runTick(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;clear(IZ)V"))
+    private void culprit$clear(int mask, boolean checkError, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
-            original.call(encoder);
+            original.call(mask, checkError);
             return;
         }
         long start = FrameProbe.begin();
         try {
-            original.call(encoder);
+            original.call(mask, checkError);
         } finally {
             FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
         }
     }
 
-    /**
-     * The drawing half of the frame: what of it no other part times is the wait for the GPU and the screen (wherever the
-     * driver puts it: fetching the next image, copying into it, showing it, or the first use of a buffer still in use)
-     * and the frame's housekeeping, all "showing the frame".
-     */
-    @WrapMethod(require = 0, method = "renderFrame(Z)V")
-    private void culprit$renderFrame(boolean advanceGameTime, Operation<Void> original) {
+    @WrapOperation(require = 0, method = "runTick(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/pipeline/RenderTarget;blitToScreen(II)V"))
+    private void culprit$blit(RenderTarget target, int width, int height, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
-            original.call(advanceGameTime);
+            original.call(target, width, height);
             return;
         }
         long start = FrameProbe.begin();
         try {
-            original.call(advanceGameTime);
+            original.call(target, width, height);
         } finally {
             FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
         }
     }
 
-    // Where the wait for the screen falls (fetching the next image, copying into it, showing it) is the driver's choice.
-    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuSurface;acquireNextTexture()V"))
-    private void culprit$acquire(GpuSurface surface, Operation<Void> original) {
+    @WrapOperation(require = 0, method = "runTick(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/Window;updateDisplay()V"))
+    private void culprit$present(Window window, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
-            original.call(surface);
+            original.call(window);
             return;
         }
         long start = FrameProbe.begin();
         try {
-            original.call(surface);
+            original.call(window);
         } finally {
             FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
         }
     }
 
-    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE",
-            target = "Lcom/mojang/renderpearl/api/device/GpuSurface;blitFromTexture(Lcom/mojang/renderpearl/api/commands/CommandEncoder;Lcom/mojang/renderpearl/api/textures/GpuTextureView;)V"))
-    private void culprit$blit(GpuSurface surface, CommandEncoder encoder, com.mojang.renderpearl.api.textures.GpuTextureView view, Operation<Void> original) {
-        if (!FrameProbe.measuring()) {
-            original.call(surface, encoder, view);
-            return;
-        }
-        long start = FrameProbe.begin();
-        try {
-            original.call(surface, encoder, view);
-        } finally {
-            FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
-        }
-    }
-
-    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuSurface;present()V"))
-    private void culprit$present(GpuSurface surface, Operation<Void> original) {
-        if (!FrameProbe.measuring()) {
-            original.call(surface);
-            return;
-        }
-        long start = FrameProbe.begin();
-        try {
-            original.call(surface);
-        } finally {
-            FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
-        }
-    }
-
-    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/FramerateLimiter;limitDisplayFPS(I)V"))
+    @WrapOperation(require = 0, method = "runTick(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;limitDisplayFPS(I)V"))
     private void culprit$limit(int limit, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(limit);

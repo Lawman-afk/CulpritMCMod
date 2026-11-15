@@ -129,22 +129,22 @@ public final class CulpritNetwork {
 
     private static void payloads(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(VERSION).optional();
-        registrar.playToClient(Report.TYPE, Report.CODEC);
-        registrar.playToClient(Status.TYPE, Status.CODEC);
+        registrar.playToClient(Report.TYPE, Report.CODEC, dev.culprit.port.net.RegisterClientPayloadHandlersEvent.handler(Report.TYPE));
+        registrar.playToClient(Status.TYPE, Status.CODEC, dev.culprit.port.net.RegisterClientPayloadHandlersEvent.handler(Status.TYPE));
         registrar.playToServer(ScanRequest.TYPE, ScanRequest.CODEC, CulpritNetwork::scanRequest);
         registrar.playToServer(ChunksRequest.TYPE, ChunksRequest.CODEC, CulpritNetwork::chunksRequest);
-        registrar.playToClient(ChunksReport.TYPE, ChunksReport.CODEC);
+        registrar.playToClient(ChunksReport.TYPE, ChunksReport.CODEC, dev.culprit.port.net.RegisterClientPayloadHandlersEvent.handler(ChunksReport.TYPE));
         registrar.playToServer(LoadRequest.TYPE, LoadRequest.CODEC, (request, context) -> {
             if (context.player() instanceof ServerPlayer player) {
                 LoadSender.asked(player, request.on());
             }
         });
-        registrar.playToClient(Load.TYPE, Load.CODEC);
+        registrar.playToClient(Load.TYPE, Load.CODEC, dev.culprit.port.net.RegisterClientPayloadHandlersEvent.handler(Load.TYPE));
     }
 
     /** Whether a player may start and stop scans: the server's setting (operators by default), as the commands. */
     public static boolean mayScan(ServerPlayer player) {
-        return dev.culprit.config.CulpritServerConfig.mayScan(player.permissions());
+        return dev.culprit.config.CulpritServerConfig.mayScan(player);
     }
 
     private static void scanRequest(ScanRequest request, IPayloadContext context) {

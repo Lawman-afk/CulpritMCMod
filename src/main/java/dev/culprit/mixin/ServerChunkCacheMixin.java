@@ -37,17 +37,17 @@ abstract class ServerChunkCacheMixin {
         }
     }
 
-    @WrapOperation(method = "tickSpawningChunk", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/world/level/NaturalSpawner;spawnForChunk(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/chunk/LevelChunk;Lnet/minecraft/world/level/NaturalSpawner$SpawnState;Ljava/util/List;)V"))
-    private void culprit$timeSpawning(ServerLevel level, LevelChunk chunk, NaturalSpawner.SpawnState state, List<MobCategory> categories,
-                                      Operation<Void> original) {
+    @WrapOperation(method = "tickChunks", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/NaturalSpawner;spawnForChunk(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/chunk/LevelChunk;Lnet/minecraft/world/level/NaturalSpawner$SpawnState;ZZZ)V"))
+    private void culprit$timeSpawning(ServerLevel level, LevelChunk chunk, NaturalSpawner.SpawnState state, boolean friendlies, boolean monsters,
+                                      boolean persistent, Operation<Void> original) {
         if (!Probe.measuring()) {
-            original.call(level, chunk, state, categories);
+            original.call(level, chunk, state, friendlies, monsters, persistent);
             return;
         }
         long start = Probe.begin();
         try {
-            original.call(level, chunk, state, categories);
+            original.call(level, chunk, state, friendlies, monsters, persistent);
         } finally {
             Probe.spawning(level, chunk, Probe.end(start));
         }

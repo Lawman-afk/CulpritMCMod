@@ -3,129 +3,80 @@ package dev.culprit.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.blaze3d.framegraph.FrameGraphBuilder;
-import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
 import com.mojang.blaze3d.vertex.PoseStack;
 
-import dev.culprit.scan.FrameProbe;
 import dev.culprit.scan.FramePhase;
+import dev.culprit.scan.FrameProbe;
+import net.minecraft.client.Camera;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.SubmitNodeStorage;
-import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
-import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
-import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
-import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
-import net.minecraft.client.renderer.entity.state.EntityRenderState;
-import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
-import net.minecraft.client.renderer.state.level.CameraRenderState;
-import net.minecraft.client.renderer.state.level.LevelRenderState;
-import net.minecraft.client.renderer.state.level.ParticlesRenderState;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.world.level.lighting.LevelLightEngine;
+import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
 /**
- * The second step of drawing the world, timed during a frame scan: each entity's and block entity's parts handed in
- * (charged to the thing its state was made from), the particles', the rest of the handing in, the sorting, the drawing
- * itself (terrain and the sorted parts sent to the GPU) and the chunk meshes built and uploaded.
+ * The level's drawing, timed during a frame scan, 1.21.1's way (this branch's own, manual.txt): the world drawn ("drawing
+ * the world": the terrain, sky, clouds and weather, what of it no other part times), the light updates the client
+ * works out first, the changed chunks' meshes built, the things' buffered parts sent to the GPU as each batch ends
+ * ("drawing the buffered parts"; 1.21.1 hands nothing in to count, so that part is not shared out to the things), and the
+ * mods' code run at each stage of it (NeoForge's level stage events).
  */
-@Mixin(LevelRenderer.class)
+// Above Sodium's 1000: Sodium replaces setupRender and renderSectionLayer (@Overwrite), and a mixin may hook another's
+// replacement only from a higher priority (an error at load, even for an optional hook, where it may not).
+@Mixin(value = LevelRenderer.class, priority = 1100)
 abstract class LevelRendererFrameMixin {
-    @WrapMethod(require = 0, method = "submitFeatures")
-    private void culprit$submit(LevelRenderState state, SubmitNodeCollector collector, boolean outline, Operation<Void> original) {
+    @WrapMethod(require = 0, method = "renderLevel(Lnet/minecraft/client/DeltaTracker;ZLnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/GameRenderer;Lnet/minecraft/client/renderer/LightTexture;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V")
+    private void culprit$world(DeltaTracker delta, boolean outline, Camera camera, GameRenderer game, LightTexture light, Matrix4f modelView, Matrix4f projection, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
-            original.call(state, collector, outline);
+            original.call(delta, outline, camera, game, light, modelView, projection);
             return;
         }
         long start = FrameProbe.begin();
         try {
-            original.call(state, collector, outline);
-        } finally {
-            FrameProbe.phase(FramePhase.SUBMIT, FrameProbe.end(start));
-        }
-    }
-
-    @WrapOperation(require = 0, method = "submitEntities", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/entity/EntityRenderDispatcher;submit(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;Lnet/minecraft/client/renderer/state/level/CameraRenderState;DDDLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;)V"))
-    private void culprit$entity(EntityRenderDispatcher dispatcher, EntityRenderState state, CameraRenderState camera, double x, double y, double z,
-                                PoseStack pose, SubmitNodeCollector collector, Operation<Void> original) {
-        if (!FrameProbe.measuring()) {
-            original.call(dispatcher, state, camera, x, y, z, pose, collector);
-            return;
-        }
-        long start = FrameProbe.begin();
-        long before = FrameProbe.parts;
-        try {
-            original.call(dispatcher, state, camera, x, y, z, pose, collector);
-        } finally {
-            FrameProbe.drawn(state, FrameProbe.end(start), FrameProbe.parts - before);
-        }
-    }
-
-    @WrapOperation(require = 0, method = "submitBlockEntities", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/blockentity/BlockEntityRenderDispatcher;submit(Lnet/minecraft/client/renderer/blockentity/state/BlockEntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V"))
-    private void culprit$blockEntity(BlockEntityRenderDispatcher dispatcher, BlockEntityRenderState state, PoseStack pose, SubmitNodeCollector collector,
-                                     CameraRenderState camera, Operation<Void> original) {
-        if (!FrameProbe.measuring()) {
-            original.call(dispatcher, state, pose, collector, camera);
-            return;
-        }
-        long start = FrameProbe.begin();
-        long before = FrameProbe.parts;
-        try {
-            original.call(dispatcher, state, pose, collector, camera);
-        } finally {
-            FrameProbe.drawn(state, FrameProbe.end(start), FrameProbe.parts - before);
-        }
-    }
-
-    @WrapOperation(require = 0, method = "submitFeatures", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/state/level/ParticlesRenderState;submit(Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V"))
-    private void culprit$particles(ParticlesRenderState state, SubmitNodeCollector collector, CameraRenderState camera, Operation<Void> original) {
-        if (!FrameProbe.measuring()) {
-            original.call(state, collector, camera);
-            return;
-        }
-        long start = FrameProbe.begin();
-        try {
-            original.call(state, collector, camera);
-        } finally {
-            FrameProbe.phase(FramePhase.PARTICLES, FrameProbe.end(start));
-        }
-    }
-
-    @WrapOperation(require = 0, method = "render", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;prepareFrame(Lnet/minecraft/client/renderer/SubmitNodeStorage;)Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;"))
-    private FeatureRenderDispatcher.PreparedFrame culprit$sort(FeatureRenderDispatcher dispatcher, SubmitNodeStorage storage,
-                                                               Operation<FeatureRenderDispatcher.PreparedFrame> original) {
-        if (!FrameProbe.measuring()) {
-            return original.call(dispatcher, storage);
-        }
-        long start = FrameProbe.begin();
-        try {
-            return original.call(dispatcher, storage);
-        } finally {
-            FrameProbe.phase(FramePhase.BATCHING, FrameProbe.end(start));
-        }
-    }
-
-    @WrapOperation(require = 0, method = "render", at = @At(value = "INVOKE",
-            target = "Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;execute(Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder$Inspector;)V"))
-    private void culprit$draw(FrameGraphBuilder frame, GraphicsResourceAllocator allocator, FrameGraphBuilder.Inspector inspector, Operation<Void> original) {
-        if (!FrameProbe.measuring()) {
-            original.call(frame, allocator, inspector);
-            return;
-        }
-        long start = FrameProbe.begin();
-        try {
-            original.call(frame, allocator, inspector);
+            original.call(delta, outline, camera, game, light, modelView, projection);
         } finally {
             FrameProbe.phase(FramePhase.DRAWING, FrameProbe.end(start));
         }
     }
 
-    @WrapMethod(require = 0, method = "compileSections")
-    private void culprit$chunks(CameraRenderState camera, Operation<Void> original) {
+    @WrapOperation(require = 0, method = "renderLevel(Lnet/minecraft/client/DeltaTracker;ZLnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/GameRenderer;Lnet/minecraft/client/renderer/LightTexture;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ClientLevel;pollLightUpdates()V"))
+    private void culprit$lightQueue(ClientLevel level, Operation<Void> original) {
+        if (!FrameProbe.measuring()) {
+            original.call(level);
+            return;
+        }
+        long start = FrameProbe.begin();
+        try {
+            original.call(level);
+        } finally {
+            FrameProbe.phase(FramePhase.LIGHT, FrameProbe.end(start));
+        }
+    }
+
+    @WrapOperation(require = 0, method = "renderLevel(Lnet/minecraft/client/DeltaTracker;ZLnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/GameRenderer;Lnet/minecraft/client/renderer/LightTexture;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/lighting/LevelLightEngine;runLightUpdates()I"))
+    private int culprit$light(LevelLightEngine engine, Operation<Integer> original) {
+        if (!FrameProbe.measuring()) {
+            return original.call(engine);
+        }
+        long start = FrameProbe.begin();
+        try {
+            return original.call(engine);
+        } finally {
+            FrameProbe.phase(FramePhase.LIGHT, FrameProbe.end(start));
+        }
+    }
+
+    @WrapMethod(require = 0, method = "compileSections(Lnet/minecraft/client/Camera;)V")
+    private void culprit$chunks(Camera camera, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(camera);
             return;
@@ -138,17 +89,78 @@ abstract class LevelRendererFrameMixin {
         }
     }
 
-    @WrapOperation(require = 0, method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/chunk/SectionRenderDispatcher;uploadTerrainBuffersToGpu()V"))
-    private void culprit$upload(SectionRenderDispatcher dispatcher, Operation<Void> original) {
+    @WrapOperation(require = 0, method = "renderLevel(Lnet/minecraft/client/DeltaTracker;ZLnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/GameRenderer;Lnet/minecraft/client/renderer/LightTexture;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/MultiBufferSource$BufferSource;endBatch(Lnet/minecraft/client/renderer/RenderType;)V"))
+    private void culprit$batch(MultiBufferSource.BufferSource buffers, RenderType type, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
-            original.call(dispatcher);
+            original.call(buffers, type);
             return;
         }
         long start = FrameProbe.begin();
         try {
-            original.call(dispatcher);
+            original.call(buffers, type);
         } finally {
-            FrameProbe.phase(FramePhase.CHUNKS, FrameProbe.end(start));
+            FrameProbe.phase(FramePhase.FEATURES, FrameProbe.end(start));
+        }
+    }
+
+    @WrapOperation(require = 0, method = "renderLevel(Lnet/minecraft/client/DeltaTracker;ZLnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/GameRenderer;Lnet/minecraft/client/renderer/LightTexture;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/MultiBufferSource$BufferSource;endBatch()V"))
+    private void culprit$batches(MultiBufferSource.BufferSource buffers, Operation<Void> original) {
+        if (!FrameProbe.measuring()) {
+            original.call(buffers);
+            return;
+        }
+        long start = FrameProbe.begin();
+        try {
+            original.call(buffers);
+        } finally {
+            FrameProbe.phase(FramePhase.FEATURES, FrameProbe.end(start));
+        }
+    }
+
+    @WrapOperation(require = 0, method = "renderLevel(Lnet/minecraft/client/DeltaTracker;ZLnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/GameRenderer;Lnet/minecraft/client/renderer/LightTexture;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/MultiBufferSource$BufferSource;endLastBatch()V"))
+    private void culprit$lastBatch(MultiBufferSource.BufferSource buffers, Operation<Void> original) {
+        if (!FrameProbe.measuring()) {
+            original.call(buffers);
+            return;
+        }
+        long start = FrameProbe.begin();
+        try {
+            original.call(buffers);
+        } finally {
+            FrameProbe.phase(FramePhase.FEATURES, FrameProbe.end(start));
+        }
+    }
+
+    @WrapOperation(require = 0, method = "renderLevel(Lnet/minecraft/client/DeltaTracker;ZLnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/GameRenderer;Lnet/minecraft/client/renderer/LightTexture;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
+            at = @At(value = "INVOKE", target = "Lnet/neoforged/neoforge/client/ClientHooks;dispatchRenderStage(Lnet/neoforged/neoforge/client/event/RenderLevelStageEvent$Stage;Lnet/minecraft/client/renderer/LevelRenderer;Lcom/mojang/blaze3d/vertex/PoseStack;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;ILnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/culling/Frustum;)V"))
+    private void culprit$stage(net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage stage, LevelRenderer renderer, PoseStack pose, Matrix4f modelView, Matrix4f projection, int ticks, Camera camera, Frustum frustum, Operation<Void> original) {
+        if (!FrameProbe.measuring()) {
+            original.call(stage, renderer, pose, modelView, projection, ticks, camera, frustum);
+            return;
+        }
+        long start = FrameProbe.begin();
+        try {
+            original.call(stage, renderer, pose, modelView, projection, ticks, camera, frustum);
+        } finally {
+            FrameProbe.phase(FramePhase.MOD_EVENTS, FrameProbe.end(start));
+        }
+    }
+
+    @WrapOperation(require = 0, method = "renderSectionLayer(Lnet/minecraft/client/renderer/RenderType;DDDLorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",
+            at = @At(value = "INVOKE", target = "Lnet/neoforged/neoforge/client/ClientHooks;dispatchRenderStage(Lnet/minecraft/client/renderer/RenderType;Lnet/minecraft/client/renderer/LevelRenderer;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;ILnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/culling/Frustum;)V"))
+    private void culprit$layerStage(RenderType layer, LevelRenderer renderer, Matrix4f modelView, Matrix4f projection, int ticks, Camera camera, Frustum frustum, Operation<Void> original) {
+        if (!FrameProbe.measuring()) {
+            original.call(layer, renderer, modelView, projection, ticks, camera, frustum);
+            return;
+        }
+        long start = FrameProbe.begin();
+        try {
+            original.call(layer, renderer, modelView, projection, ticks, camera, frustum);
+        } finally {
+            FrameProbe.phase(FramePhase.MOD_EVENTS, FrameProbe.end(start));
         }
     }
 }

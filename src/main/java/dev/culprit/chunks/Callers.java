@@ -69,7 +69,7 @@ final class Callers {
             String path = name.replace('.', '/') + ".class";
             try {
                 for (IModFileInfo file : ModList.get().getModFiles()) {
-                    if (!file.getMods().isEmpty() && file.getFile().getContents().containsFile(path)) {
+                    if (!file.getMods().isEmpty() && java.nio.file.Files.exists(file.getFile().findResource(path))) {
                         return file.getMods().getFirst().getModId();
                     }
                 }

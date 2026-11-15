@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.culprit.port.mixin",
+  "plugin": "dev.culprit.port.mixin.PortMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "GameTestHelperMixin",
+    "GameTestChunkTicksMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

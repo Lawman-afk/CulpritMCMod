@@ -7,7 +7,7 @@ import java.util.function.Consumer;
 
 import dev.culprit.Culprit;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 
 /**
@@ -17,7 +17,7 @@ import net.minecraft.world.level.block.Blocks;
  */
 public final class CulpritGameTests {
     /** Structure with a 16x16 smooth-stone floor at y=0 and 15 blocks of air above. */
-    public static final Identifier FLOOR_16 = Culprit.id("gametest/floor_16");
+    public static final ResourceLocation FLOOR_16 = Culprit.id("gametest/floor_16");
 
     private static final List<TestSpec> SPECS = new ArrayList<>();
 
@@ -25,7 +25,7 @@ public final class CulpritGameTests {
      * A test: its name, the structure it runs in, its timeout, whether its plot has open sky, its batch (tests in one
      * batch run side by side; batches run one after another), and what it does.
      */
-    public record TestSpec(String name, Identifier structure, int maxTicks, boolean sky, String batch, Consumer<GameTestHelper> body) {}
+    public record TestSpec(String name, ResourceLocation structure, int maxTicks, boolean sky, String batch, Consumer<GameTestHelper> body) {}
 
     static {
         test("harness_floor", FLOOR_16, 20, helper -> {
@@ -41,17 +41,17 @@ public final class CulpritGameTests {
 
     private CulpritGameTests() {}
 
-    static void test(String name, Identifier structure, int maxTicks, Consumer<GameTestHelper> body) {
+    static void test(String name, ResourceLocation structure, int maxTicks, Consumer<GameTestHelper> body) {
         SPECS.add(new TestSpec(name, structure, maxTicks, false, "default", body));
     }
 
     /** A test in a batch of its own: run alone, as a test that scans must be (one scan at a time). */
-    static void testAlone(String name, Identifier structure, int maxTicks, Consumer<GameTestHelper> body) {
+    static void testAlone(String name, ResourceLocation structure, int maxTicks, Consumer<GameTestHelper> body) {
         SPECS.add(new TestSpec(name, structure, maxTicks, false, name, body));
     }
 
     /** A test with open sky over its plot (no barrier lid), for things that reach above it. */
-    static void testOpenSky(String name, Identifier structure, int maxTicks, Consumer<GameTestHelper> body) {
+    static void testOpenSky(String name, ResourceLocation structure, int maxTicks, Consumer<GameTestHelper> body) {
         SPECS.add(new TestSpec(name, structure, maxTicks, true, "default", body));
     }
 

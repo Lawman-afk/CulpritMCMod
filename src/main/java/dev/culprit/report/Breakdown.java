@@ -86,18 +86,18 @@ public final class Breakdown {
     private static List<Part> frameParts(ReportData d) {
         List<Part> parts = new ArrayList<>();
         parts.add(new Part(Component.translatableWithFallback("culprit.frame.entities", "Entities"),
-                Component.translatableWithFallback("culprit.frame.about.entities2", "made ready, handed in, their share of the drawing"),
+                Component.translatableWithFallback("culprit.frame.about.entities2", "each one drawn, its parts buffered for the GPU"),
                 d.kindNs[Kind.ENTITY], F_ENTITIES));
         parts.add(new Part(Component.translatableWithFallback("culprit.frame.block_entities", "Block entities"),
-                Component.translatableWithFallback("culprit.frame.about.block_entities2", "chests, signs: made ready, handed in, drawn"),
+                Component.translatableWithFallback("culprit.frame.about.block_entities2", "chests, signs: each one drawn"),
                 d.kindNs[Kind.BLOCK_ENTITY], F_BLOCK_ENTITIES));
         parts.add(new Part(Component.translatableWithFallback("culprit.frame.particle_kinds", "Particles"),
-                Component.translatableWithFallback("culprit.frame.about.particle_kinds", "each kind, moved and made ready"),
+                Component.translatableWithFallback("culprit.frame.about.particle_kinds", "each kind, moved and drawn"),
                 d.kindNs[Kind.PARTICLE], F_WORLD));
         for (int p = 0; p < Math.min(FramePhase.COUNT, d.phaseNs.length); p++) {
-            if ((p == FramePhase.SHADOWS || p == FramePhase.FAR_TERRAIN) && d.phaseNs[p] == 0) {
-                continue;                                       // (no shader pack with shadows, no Distant Horizons: no such part)
-            }
+            if (d.phaseNs[p] == 0) {
+                continue;                                       // (no shader pack with shadows, no Distant Horizons, or a part a
+            }                                                   // version has no step of its own for: none to show)
             int group = switch (p) {
                 case FramePhase.CLIENT_TICK, FramePhase.PACKETS -> F_CLIENT;
                 case FramePhase.GUI, FramePhase.MOD_EVENTS -> F_SCREEN;

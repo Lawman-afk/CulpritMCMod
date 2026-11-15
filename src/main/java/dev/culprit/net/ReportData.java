@@ -126,7 +126,7 @@ public final class ReportData {
         for (int i = 0; i < d.things; i++) {
             ScanReport.Thing t = r.things.get(i);
             d.kind[i] = t.kind();
-            d.dim[i] = dims.id(t.level().identifier().toString());
+            d.dim[i] = dims.id(t.level().location().toString());
             d.pos[i] = t.pos();
             d.type[i] = names.id(t.type());
             d.total[i] = t.totalNs();
@@ -148,7 +148,7 @@ public final class ReportData {
             d.typeKind[i] = (byte) g.kind();
             d.typeTotal[i] = g.totalNs();
             d.typeCount[i] = g.things();
-            d.typeWorstDim[i] = dims.id(g.worst().level().identifier().toString());
+            d.typeWorstDim[i] = dims.id(g.worst().level().location().toString());
             d.typeWorstPos[i] = g.worst().pos();
         }
 
@@ -164,7 +164,7 @@ public final class ReportData {
             d.modName[i] = names.id(g.name());
             d.modTotal[i] = g.totalNs();
             d.modCount[i] = g.things();
-            d.modWorstDim[i] = dims.id(g.worst().level().identifier().toString());
+            d.modWorstDim[i] = dims.id(g.worst().level().location().toString());
             d.modWorstPos[i] = g.worst().pos();
             d.modWorstKind[i] = g.worst().kind();
         }
@@ -180,7 +180,7 @@ public final class ReportData {
         d.chunkTopKind = new byte[d.chunks];
         for (int i = 0; i < d.chunks; i++) {
             ScanReport.ChunkGroup c = r.chunks.get(i);
-            d.chunkDim[i] = dims.id(c.level().identifier().toString());
+            d.chunkDim[i] = dims.id(c.level().location().toString());
             d.chunkX[i] = c.x();
             d.chunkZ[i] = c.z();
             d.chunkTotal[i] = c.totalNs();

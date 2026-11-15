@@ -34,29 +34,28 @@ abstract class MinecraftServerMixin {
         }
     }
 
-    @WrapMethod(method = "tickConnection")
-    private void culprit$timeConnections(Operation<Void> original) {
+    @WrapOperation(method = "tickChildren", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerConnectionListener;tick()V"))
+    private void culprit$timeConnections(net.minecraft.server.network.ServerConnectionListener connections, Operation<Void> original) {
         if (!Probe.measuring()) {
-            original.call();
+            original.call(connections);
             return;
         }
         long start = Probe.begin();
         try {
-            original.call();
+            original.call(connections);
         } finally {
             Probe.phase(Phase.CONNECTIONS, Probe.end(start));
         }
     }
 
-    @WrapMethod(method = "autoSave")
-    private void culprit$timeAutosave(Operation<Void> original) {
+    @WrapOperation(method = "tickServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;saveEverything(ZZZ)Z"))
+    private boolean culprit$timeAutosave(MinecraftServer server, boolean quietly, boolean flush, boolean forced, Operation<Boolean> original) {
         if (!Probe.measuring()) {
-            original.call();
-            return;
+            return original.call(server, quietly, flush, forced);
         }
         long start = Probe.begin();
         try {
-            original.call();
+            return original.call(server, quietly, flush, forced);
         } finally {
             Probe.phase(Phase.AUTOSAVE, Probe.end(start));
         }

@@ -70,7 +70,7 @@ public final class ClientReport {
     /** Asks the server for a look at its loaded chunks (operators, as scans). */
     public static void requestChunks() {
         if (ScanScreen.serverHasCulprit()) {
-            net.neoforged.neoforge.client.network.ClientPacketDistributor.sendToServer(new CulpritNetwork.ChunksRequest());
+            net.neoforged.neoforge.network.PacketDistributor.sendToServer(new CulpritNetwork.ChunksRequest());
         }
     }
 
@@ -196,7 +196,7 @@ public final class ClientReport {
                         (ticks + 19) / 20).withStyle(ChatFormatting.GRAY)));
             }
             case CulpritNetwork.Status.DENIED -> {
-                if (Minecraft.getInstance().gui.screen() == null) {
+                if (Minecraft.getInstance().screen == null) {
                     say(tag().append(Component.translatableWithFallback("culprit.chat.denied", "Only operators can scan this server.")
                             .withStyle(ChatFormatting.RED)));
                 }
@@ -268,7 +268,7 @@ public final class ClientReport {
         try {
             java.nio.file.Path file = dev.culprit.report.ReportFile.write(d, mc.gameDirectory.toPath());
             Component name = Component.literal(file.getFileName().toString()).withStyle(s -> s.withUnderlined(true)
-                    .withClickEvent(new net.minecraft.network.chat.ClickEvent.OpenFile(file.getParent().toString())));
+                    .withClickEvent(new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.OPEN_FILE, file.getParent().toString())));
             say(tag().append(Component.translatableWithFallback("culprit.chat.saved", "Saved the report: %s (and the same as .json).", name)));
             return true;
         } catch (java.io.IOException | RuntimeException e) {

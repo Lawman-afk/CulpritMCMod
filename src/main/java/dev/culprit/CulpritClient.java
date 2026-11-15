@@ -27,8 +27,8 @@ public class CulpritClient {
         FrameEvents.register();                               // mods' frame events, timed during a frame scan
         // What the crosshair rests on, read out under it while the results are shown on the world.
         modBus.addListener((RegisterGuiLayersEvent event) -> {
-            event.registerAbove(VanillaGuiLayers.CROSSHAIR, Culprit.id("readout"), Overlay::drawReadout);
-            event.registerAbove(VanillaGuiLayers.CROSSHAIR, Culprit.id("hud_line"), dev.culprit.client.HudLine::draw);
+            event.registerAbove(VanillaGuiLayers.CROSSHAIR, Culprit.id("readout"), (gg_, dt_) -> Overlay.drawReadout(new dev.culprit.port.GuiGraphicsExtractor(gg_), dt_));
+            event.registerAbove(VanillaGuiLayers.CROSSHAIR, Culprit.id("hud_line"), (gg_, dt_) -> dev.culprit.client.HudLine.draw(new dev.culprit.port.GuiGraphicsExtractor(gg_), dt_));
         });
         // The HUD line asks a server for its numbers on joining, and again when its setting changes.
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(

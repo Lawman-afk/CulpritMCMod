@@ -27,10 +27,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.FileUtil;
+import net.minecraft.FileUtil;
 import net.minecraft.world.Container;
-import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -47,7 +47,7 @@ import net.minecraft.world.level.block.StandingSignBlock;
 import net.minecraft.world.level.block.entity.CommandBlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignText;
-import net.minecraft.world.level.block.entity.SignTextSlot;
+
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.levelgen.FlatLevelSource;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -61,7 +61,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Development aid, left out of the released jar (build.gradle's jar task; found by its annotation, so nothing in the
@@ -99,19 +99,19 @@ public final class Lab {
         }
         Minecraft mc = Minecraft.getInstance();
         mc.options.pauseOnLostFocus = false;
-        if (mc.gui.screen() instanceof net.minecraft.client.gui.screens.PauseScreen) {
-            mc.gui.setScreen(null);
+        if (mc.screen instanceof net.minecraft.client.gui.screens.PauseScreen) {
+            mc.setScreen(null);
         }
         if (mc.options.tutorialStep != net.minecraft.client.tutorial.TutorialSteps.NONE) {
             mc.getTutorial().setStep(net.minecraft.client.tutorial.TutorialSteps.NONE);
         }
-        if (mc.level == null && !worldMade && mc.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen) {
+        if (mc.level == null && !worldMade && mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen) {
             worldMade = true;
             try {
-                var settings = new LevelSettings("Culprit Lab", GameType.CREATIVE, LevelSettings.DifficultySettings.DEFAULT, true,
-                        WorldDataConfiguration.DEFAULT);
+                var settings = new LevelSettings("Culprit Lab", GameType.CREATIVE, false, net.minecraft.world.Difficulty.NORMAL, true,
+                        new net.minecraft.world.level.GameRules(), WorldDataConfiguration.DEFAULT);
                 mc.createWorldOpenFlows().createFreshLevel(fresh(mc, "culprit_lab"), settings, new WorldOptions(0L, false, false), Lab::flat,
-                        mc.gui.screen());
+                        mc.screen);
             } catch (IOException e) {
                 Culprit.LOGGER.error("Lab: could not make a world", e);
             }
@@ -132,7 +132,7 @@ public final class Lab {
             if (waited == SETTLE) {
                 scanned = true;
                 // As a player starts one from the scan menu (F8): the request, then the chat as it starts and ends.
-                ClientPacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(SCAN_TICKS / 20));
+                PacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(SCAN_TICKS / 20));
                 Culprit.LOGGER.info("Lab: scanning for {} ticks", SCAN_TICKS);
             }
             return;
@@ -166,8 +166,8 @@ public final class Lab {
             saved = true;
             Culprit.LOGGER.info("Lab: report saved: {}", ClientReport.saveReport());
         }
-        if (mc.gui.hud.isHidden() == hudWanted) {
-            mc.gui.hud.toggle();                                   // no hand, hotbar or chat in the pictures, but the chat's
+        if (mc.options.hideGui == hudWanted) {
+            mc.options.hideGui = !mc.options.hideGui;                                   // no hand, hotbar or chat in the pictures, but the chat's
         }
         // Each view: the camera and what is on screen, a wait for the frame to settle, the picture.
         int t = ++shot;
@@ -177,7 +177,7 @@ public final class Lab {
         int step = t / EACH;
         if (step > 1 && step - 2 < views.size()) {
             View v = views.get(step - 2);
-            Screenshot.grab(mc.gameDirectory, "lab_" + v.name() + ".png", mc.gameRenderer.mainRenderTarget(), 1,
+            Screenshot.grab(mc.gameDirectory, "lab_" + v.name() + ".png", mc.getMainRenderTarget(),
                     msg -> Culprit.LOGGER.info("Lab: {}", msg.getString()));
         }
         if (step - 1 < views.size()) {
@@ -200,33 +200,33 @@ public final class Lab {
             }
             if (v.screenTab() >= 0) {
                 CulpritScreen.showTab(v.screenTab());
-                if (!(mc.gui.screen() instanceof CulpritScreen)) {
-                    mc.gui.setScreen(new CulpritScreen());
+                if (!(mc.screen instanceof CulpritScreen)) {
+                    mc.setScreen(new CulpritScreen());
                 }
-                if (mc.gui.screen() instanceof CulpritScreen screen) {
+                if (mc.screen instanceof CulpritScreen screen) {
                     screen.setSearch(v.search());
                 }
             } else if (v.screenTab() == SCAN_MENU) {
-                mc.gui.setScreen(new ScanScreen());
+                mc.setScreen(new ScanScreen());
             } else if (v.screenTab() == SCAN_RUNNING) {
-                ClientPacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(30));     // as the menu's 30 s button does
-                mc.gui.setScreen(new ScanScreen());
+                PacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(30));     // as the menu's 30 s button does
+                mc.setScreen(new ScanScreen());
             } else if (v.screenTab() == CHAT) {
-                mc.gui.setScreen(new ChatScreen("", false));
+                mc.setScreen(new ChatScreen(""));
             } else if (v.screenTab() == SETTINGS) {
                 // The player's settings, as the results screen's Settings button opens them.
-                mc.gui.setScreen(CulpritScreen.settings(new CulpritScreen()));
-            } else if (mc.gui.screen() != null) {
-                mc.gui.setScreen(null);
+                mc.setScreen(CulpritScreen.settings(new CulpritScreen()));
+            } else if (mc.screen != null) {
+                mc.setScreen(null);
             }
             server.execute(() -> server.getPlayerList().getPlayers().getFirst()
-                    .teleportTo(server.overworld(), v.at().x, v.at().y, v.at().z, Set.of(), v.yaw(), v.pitch(), true));
+                    .teleportTo(server.overworld(), v.at().x, v.at().y, v.at().z, v.yaw(), v.pitch()));
             return;
         }
         if (step - 1 == views.size()) {
-            mc.gui.setScreen(null);
+            mc.setScreen(null);
             server.execute(() -> server.getPlayerList().getPlayers().getFirst()
-                    .teleportTo(server.overworld(), spawn.x, spawn.y, spawn.z, Set.of(), 180f, 10f, true));
+                    .teleportTo(server.overworld(), spawn.x, spawn.y, spawn.z, 180f, 10f));
             return;
         }
         if (step - 1 > views.size() + 1) {
@@ -253,8 +253,8 @@ public final class Lab {
     private static void build(ServerLevel level) {
         var commands = level.getServer().getCommands();
         var source = level.getServer().createCommandSourceStack().withSuppressedOutput();
-        for (String c : List.of("time set 6000", "gamerule advance_time false", "gamerule advance_weather false", "weather clear",
-                "gamerule spawn_mobs false", "difficulty peaceful", "kill @e[type=!player]", "gamerule command_block_output false",
+        for (String c : List.of("time set 6000", "gamerule doDaylightCycle false", "gamerule doWeatherCycle false", "weather clear",
+                "gamerule doMobSpawning false", "difficulty peaceful", "kill @e[type=!player]", "gamerule commandBlockOutput false",
                 "scoreboard objectives add culprit_lab dummy", "forceload add 320 0")) {             // a chunk kept loaded far off (20, 0)
             commands.performPrefixedCommand(source, c);
         }
@@ -293,9 +293,9 @@ public final class Lab {
         // A glass room of villagers (their brains are among the costliest entities).
         box(level, 5, y, 6, 12, y + 3, 13);
         for (int i = 0; i < 24; i++) {
-            var villager = EntityTypes.VILLAGER.create(level, EntitySpawnReason.COMMAND);
+            var villager = EntityType.VILLAGER.create(level);
             if (villager != null) {
-                villager.snapTo(6.5 + (i % 6), y, 7.5 + (i / 6) * 1.5, 0f, 0f);
+                villager.moveTo(6.5 + (i % 6), y, 7.5 + (i / 6) * 1.5, 0f, 0f);
                 villager.setPersistenceRequired();
                 level.addFreshEntity(villager);
             }
@@ -311,9 +311,9 @@ public final class Lab {
             }
         }
         for (int i = 0; i < 40; i++) {
-            var cow = EntityTypes.COW.create(level, EntitySpawnReason.COMMAND);
+            var cow = EntityType.COW.create(level);
             if (cow != null) {
-                cow.snapTo(-12.5 + (i % 8) * 1.2, y, -13.5 + (i / 8) * 1.4, i * 37f, 0f);
+                cow.moveTo(-12.5 + (i % 8) * 1.2, y, -13.5 + (i / 8) * 1.4, i * 37f, 0f);
                 cow.setPersistenceRequired();
                 level.addFreshEntity(cow);
             }
@@ -377,7 +377,7 @@ public final class Lab {
         player.setGameMode(GameType.CREATIVE);
         player.getAbilities().flying = true;                       // (else the camera falls between the views)
         player.onUpdateAbilities();
-        player.teleportTo(level, spawn.x, spawn.y, spawn.z, Set.of(), 180f, 10f, true);
+        player.teleportTo(level, spawn.x, spawn.y, spawn.z, 180f, 10f);
 
         List<View> list = new ArrayList<>();
         list.add(eye("overview", 0.5, y + 16.0, -24.0, 0f, 32f, NO_SCREEN, false));
@@ -429,25 +429,25 @@ public final class Lab {
     private static void sign(ServerLevel level, BlockPos at, List<String> lines) {
         level.setBlock(at, Blocks.OAK_SIGN.defaultBlockState().setValue(StandingSignBlock.ROTATION, 0), 3);
         if (level.getBlockEntity(at) instanceof SignBlockEntity sign) {
-            SignText.Mutable text = sign.getText(SignTextSlot.FRONT).asMutable();
+            SignText text = sign.getText(true);
             for (int i = 0; i < Math.min(4, lines.size()); i++) {
-                text.setLine(i, Component.literal(lines.get(i)));
+                text = text.setMessage(i, Component.literal(lines.get(i)));
             }
-            sign.setText(text.asImmutable(), SignTextSlot.FRONT);
+            sign.setText(text, true);
             sign.setChanged();
             level.sendBlockUpdated(at, sign.getBlockState(), sign.getBlockState(), 3);
         }
     }
 
     /** A flat world of grass over dirt and stone, a plains biome. */
-    private static WorldDimensions flat(HolderLookup.Provider registries) {
+    private static WorldDimensions flat(net.minecraft.core.RegistryAccess registries) {
         var biomes = registries.lookupOrThrow(Registries.BIOME);
         var settings = FlatLevelGeneratorSettings.getDefault(biomes, registries.lookupOrThrow(Registries.STRUCTURE_SET),
                         registries.lookupOrThrow(Registries.PLACED_FEATURE))
                 .withBiomeAndLayers(List.of(new FlatLayerInfo(1, Blocks.BEDROCK), new FlatLayerInfo(20, Blocks.STONE),
                         new FlatLayerInfo(3, Blocks.DIRT), new FlatLayerInfo(1, Blocks.GRASS_BLOCK)),
                         java.util.Optional.empty(), biomes.getOrThrow(Biomes.PLAINS));
-        return WorldPresets.createTestWorldDimensions(registries).replaceOverworldGenerator(registries, new FlatLevelSource(settings));
+        return WorldPresets.createNormalWorldDimensions(registries).replaceOverworldGenerator(registries, new FlatLevelSource(settings));
     }
 
     /** Deletes the worlds earlier runs left under {@code name} and gives the folder for this run's. */

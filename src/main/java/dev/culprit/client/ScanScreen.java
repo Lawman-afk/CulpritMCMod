@@ -9,13 +9,13 @@ import dev.culprit.net.CulpritNetwork;
 import dev.culprit.scan.FrameScan;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.culprit.port.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.FormattedCharSequence;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * The scan menu (F8 by default): a scan of the server's ticks (what lags the server; it needs Culprit on the server,
@@ -56,7 +56,7 @@ public final class ScanScreen extends Screen {
             tickLengths.add(addRenderableWidget(Button.builder(tr("short", "%s s", seconds), b -> startTicks(seconds)).bounds(x, top() + 70, 58, 20).build()));
             x += 62;
         }
-        stopTicks = addRenderableWidget(Button.builder(tr("stop_short", "Stop"), b -> ClientPacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(0)))
+        stopTicks = addRenderableWidget(Button.builder(tr("stop_short", "Stop"), b -> PacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(0)))
                 .bounds(x, top() + 70, W - 24 - (x - x0), 20).build());
         x = x0;
         for (int seconds : LENGTHS) {
@@ -65,19 +65,19 @@ public final class ScanScreen extends Screen {
         }
         stopFrames = addRenderableWidget(Button.builder(tr("stop_short", "Stop"), b -> FrameScan.stop()).bounds(x, top() + 128, W - 24 - (x - x0), 20).build());
         addRenderableWidget(Button.builder(Component.translatableWithFallback("culprit.scan.results", "Results (%s)",
-                CulpritKeys.RESULTS.getTranslatedKeyMessage()), b -> Minecraft.getInstance().gui.setScreen(new CulpritScreen()))
+                CulpritKeys.RESULTS.getTranslatedKeyMessage()), b -> Minecraft.getInstance().setScreen(new CulpritScreen()))
                 .bounds(x0, top() + H - 28, 140, 20).build());
         addRenderableWidget(Button.builder(Component.translatableWithFallback("culprit.screen.done", "Done"), b -> onClose())
                 .bounds(left() + W - 72, top() + H - 28, 60, 20).build());
         // Ask whether this player may scan the server, so its buttons say so before a press does.
         if (serverHasCulprit()) {
-            ClientPacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(-1));
+            PacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(-1));
         }
         tick();
     }
 
     private void startTicks(int seconds) {
-        ClientPacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(seconds));
+        PacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(seconds));
         onClose();                                      // the scan runs on; chat says when it starts and ends
     }
 
@@ -117,15 +117,15 @@ public final class ScanScreen extends Screen {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
-        super.extractBackground(g, mouseX, mouseY, partial);
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics gg_, int mouseX, int mouseY, float partial) { GuiGraphicsExtractor g = new GuiGraphicsExtractor(gg_);
+        super.renderBackground(g.unwrap(), mouseX, mouseY, partial);
         g.fill(left(), top(), left() + W, top() + H, PANEL);
         g.outline(left(), top(), W, H, EDGE);
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
-        super.extractRenderState(g, mouseX, mouseY, partial);
+    public void render(net.minecraft.client.gui.GuiGraphics gg_, int mouseX, int mouseY, float partial) { GuiGraphicsExtractor g = new GuiGraphicsExtractor(gg_);
+        super.render(g.unwrap(), mouseX, mouseY, partial);
         int x = left() + 12, y = top() + 10;
         g.text(this.font, this.title.copy().withStyle(ChatFormatting.BOLD), x, y, HEAD);
         y += 14;

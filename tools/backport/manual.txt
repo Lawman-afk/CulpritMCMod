@@ -1,0 +1,10 @@
+# Files edited by hand on this branch (paths here): port.py keeps them; a sync merges main's changes into them.
+src/main/java/dev/culprit/gametest/GameTestRegistration.java
+src/main/java/dev/culprit/client/DevRuns.java
+src/main/java/dev/culprit/mixin/MinecraftFrameMixin.java
+src/main/java/dev/culprit/mixin/GameRendererFrameMixin.java
+src/main/java/dev/culprit/mixin/LevelExtractorFrameMixin.java
+src/main/java/dev/culprit/mixin/LevelRendererFrameMixin.java
+src/main/java/dev/culprit/mixin/QuadParticleFrameMixin.java
+src/main/java/dev/culprit/mixin/SodiumFrameMixin.java
+src/main/java/dev/culprit/mixin/IrisShadowFrameMixin.java

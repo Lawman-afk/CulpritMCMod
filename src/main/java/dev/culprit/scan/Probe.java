@@ -140,7 +140,7 @@ public final class Probe {
     private static void perChunk(ServerLevel level, LevelChunk chunk, byte kind, String type, long ns) {
         CostTable t = table;
         int li = t.levelIndex(level);
-        long key = chunk.getPos().pack();
+        long key = chunk.getPos().toLong();
         int slot = t.slotAt(li, kind, key);
         if (slot < 0) {
             long centre = BlockPos.asLong(chunk.getPos().getMinBlockX() + 8, level.getSeaLevel(), chunk.getPos().getMinBlockZ() + 8);

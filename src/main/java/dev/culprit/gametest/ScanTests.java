@@ -25,14 +25,14 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.EntityTypes;
-import net.minecraft.world.entity.animal.pig.Pig;
-import net.minecraft.world.entity.vehicle.minecart.Minecart;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.animal.Pig;
+import net.minecraft.world.entity.vehicle.Minecart;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ObserverBlock;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
-import net.minecraft.world.level.gamerules.GameRules;
+import net.minecraft.world.level.GameRules;
 
 /**
  * The tick scan's tests (DESIGN §7). Each plants lag sources whose places and kinds are known, scans, and checks the
@@ -59,7 +59,7 @@ final class ScanTests {
             helper.setBlock(new BlockPos(3, 1, 8), Blocks.OBSERVER.defaultBlockState().setValue(ObserverBlock.FACING, Direction.EAST));
             helper.setBlock(new BlockPos(4, 1, 8), Blocks.OBSERVER.defaultBlockState().setValue(ObserverBlock.FACING, Direction.WEST));
             for (int i = 0; i < 12; i++) {
-                helper.spawn(EntityTypes.PIG, 2 + (i % 6) * 2, 1, 11 + (i / 6) * 2);
+                helper.spawn(EntityType.PIG, 2 + (i % 6) * 2, 1, 11 + (i / 6) * 2);
             }
             // The report arrives at the end of a server tick; the checks run in the test's own time, where a failed
             // check fails the test.
@@ -77,13 +77,13 @@ final class ScanTests {
             }
             GameRules rules = helper.getLevel().getGameRules();
             MinecraftServer server = helper.getLevel().getServer();
-            int speed = rules.get(GameRules.RANDOM_TICK_SPEED);
+            int speed = rules.getInt(GameRules.RULE_RANDOMTICKING);
             helper.runAfterDelay(5, () -> whenNoScan(helper, () -> {
                 helper.assertTrue(TickScan.start(RANDOM_SCAN_TICKS, report -> {
-                    rules.set(GameRules.RANDOM_TICK_SPEED, speed, server);
+                    rules.getRule(GameRules.RULE_RANDOMTICKING).set(speed, server);
                     helper.runAfterDelay(1, () -> checkRandomTicks(helper, report));
                 }), "the scan starts");
-                rules.set(GameRules.RANDOM_TICK_SPEED, RANDOM_TICK_SPEED, server);
+                rules.getRule(GameRules.RULE_RANDOMTICKING).set(RANDOM_TICK_SPEED, server);
             }));
         });
 
@@ -117,8 +117,8 @@ final class ScanTests {
             ServerLevel level = helper.getLevel();
             helper.setBlock(0, 1, 0, Blocks.HOPPER);
             BlockPos owner = helper.absolutePos(new BlockPos(0, 1, 0));
-            ChunkPos home = ChunkPos.containing(owner);
-            Loaders at = new Loaders(home.x() + 40, home.x() + 46, home.x() + 52, home.x() + 58, home.x() + 64, home.z());
+            ChunkPos home = new ChunkPos(owner);
+            Loaders at = new Loaders(home.x + 40, home.x + 46, home.x + 52, home.x + 58, home.x + 64, home.z);
             level.getServer().getCommands().performPrefixedCommand(serverSource(level), "forceload add " + at.command() * 16 + " " + at.z() * 16);
             level.setChunkForced(at.code(), at.z(), true);
             GameTestRegistration.CONTROLLER.forceChunk(level, owner, at.block(), at.z(), true, false);
@@ -145,9 +145,9 @@ final class ScanTests {
         // A pig riding a minecart: the minecart is ticked from the level's loop, the pig inside the minecart's tick;
         // each must be in the report as its own thing, every tick.
         CulpritGameTests.testAlone("scan_charges_passengers_apart", CulpritGameTests.FLOOR_16, 300, helper -> {
-            Minecart cart = helper.spawn(EntityTypes.MINECART, 7, 1, 7);
-            Pig pig = helper.spawn(EntityTypes.PIG, 7, 1, 7);
-            helper.assertTrue(pig.startRiding(cart, true, false), "the pig gets into the minecart");
+            Minecart cart = helper.spawn(EntityType.MINECART, 7, 1, 7);
+            Pig pig = helper.spawn(EntityType.PIG, 7, 1, 7);
+            helper.assertTrue(pig.startRiding(cart, true), "the pig gets into the minecart");
             helper.runAfterDelay(5, () -> whenNoScan(helper, () -> helper.assertTrue(TickScan.start(20, report -> helper.runAfterDelay(1, () -> {
                 helper.assertTrue(pig.getVehicle() == cart, "the pig is still riding");
                 var cartThing = report.things.stream().filter(t -> t.kind() == Kind.ENTITY && t.type().equals("minecraft:minecart")
@@ -270,11 +270,11 @@ final class ScanTests {
                 "each place's moving block is one thing, not one a push (" + moving.size() + " things)");
 
         // Chunk ticks: the plot's chunk, measured and listed.
-        ChunkPos chunk = ChunkPos.containing(observerA);
+        ChunkPos chunk = new ChunkPos(observerA);
         helper.assertTrue(r.things.stream().anyMatch(t -> t.kind() == Kind.CHUNK && t.level().equals(level)
-                        && (t.blockPos().getX() >> 4) == chunk.x() && (t.blockPos().getZ() >> 4) == chunk.z()),
+                        && (t.blockPos().getX() >> 4) == chunk.x && (t.blockPos().getZ() >> 4) == chunk.z),
                 "the plot's chunk has its own tick measured");
-        helper.assertTrue(r.chunks.stream().anyMatch(c -> c.level().equals(level) && c.x() == chunk.x() && c.z() == chunk.z() && c.totalNs() > 0),
+        helper.assertTrue(r.chunks.stream().anyMatch(c -> c.level().equals(level) && c.x() == chunk.x && c.z() == chunk.z && c.totalNs() > 0),
                 "the plot's chunk is in the chunk list");
 
         // The folds: the hoppers as one type, the vanilla things under minecraft; and every list adds up to the same.
@@ -379,7 +379,7 @@ final class ScanTests {
         level.getChunk(at.asked(), at.z());
         level.getChunk(at.command() + 2, at.z());
         ChunkData data = ChunkCensus.take(level.getServer());
-        ChunkData.Dim d = data.dims.stream().filter(x -> x.dim.equals(level.dimension().identifier().toString())).findFirst().orElseThrow();
+        ChunkData.Dim d = data.dims.stream().filter(x -> x.dim.equals(level.dimension().location().toString())).findFirst().orElseThrow();
         int command = chunkAt(d, at.command(), at.z()), code = chunkAt(d, at.code(), at.z()), block = chunkAt(d, at.block(), at.z());
         int team = chunkAt(d, at.team(), at.z()), asked = chunkAt(d, at.asked(), at.z()), next = chunkAt(d, at.command() + 1, at.z());
         int edge = chunkAt(d, at.command() + 2, at.z());
@@ -387,7 +387,7 @@ final class ScanTests {
             helper.runAfterDelay(10, () -> waitForChunks(helper, level, owner, at, tries + 1));
             return;
         }
-        long commandKey = ChunkPos.pack(at.command(), at.z()), codeKey = ChunkPos.pack(at.code(), at.z());
+        long commandKey = ChunkPos.asLong(at.command(), at.z()), codeKey = ChunkPos.asLong(at.code(), at.z());
         try {
             helper.assertTrue(command >= 0 && code >= 0 && block >= 0 && team >= 0 && asked >= 0, "the five loaders' chunks are loaded");
             assertKept(helper, d, command, ChunkData.FORCED, "/forceload by the server");
@@ -396,8 +396,8 @@ final class ScanTests {
             assertKept(helper, d, team, ChunkData.MODS, "Culprit: owner " + TEAM.toString().substring(0, 8));
             assertKept(helper, d, asked, ChunkData.REQUESTS, "Culprit: asked for it");
             assertKept(helper, d, edge, ChunkData.FORCED, "/forceload by the server");
-            ChunkPos home = ChunkPos.containing(owner);
-            assertKept(helper, d, chunkAt(d, home.x(), home.z()), ChunkData.OTHER, "the game's test structures");
+            ChunkPos home = new ChunkPos(owner);
+            assertKept(helper, d, chunkAt(d, home.x, home.z), ChunkData.OTHER, "the game's test structures");
             helper.assertTrue(next >= 0 && d.reason[next] == ChunkData.FORCED && d.status[next] <= d.status[command],
                     "the forced chunk's neighbour is loaded by it, and no more busy than it");
             List<String> lines = ChunkText.loaders(d, 1000);
@@ -407,13 +407,13 @@ final class ScanTests {
             }
 
             // The record goes with the level's data: saved and loaded, it is the same.
-            ForcedBy record = level.getDataStorage().get(ForcedBy.TYPE);
+            ForcedBy record = ForcedBy.TYPE.find(level);
             helper.assertTrue(record != null && record.get(codeKey) != null, "the level keeps a record of who forced what");
             ForcedBy loaded = ForcedBy.CODEC.parse(NbtOps.INSTANCE, ForcedBy.CODEC.encodeStart(NbtOps.INSTANCE, record).getOrThrow()).getOrThrow();
             helper.assertTrue(record.get(codeKey).equals(loaded.get(codeKey)) && record.get(commandKey).equals(loaded.get(commandKey)),
                     "the record saves and loads as it was");
             level.getServer().getCommands().performPrefixedCommand(serverSource(level), "forceload remove " + at.command() * 16 + " " + at.z() * 16);
-            helper.assertTrue(ForcedBy.of(level, commandKey) == null && !level.getForceLoadedChunks().contains(commandKey),
+            helper.assertTrue(ForcedBy.of(level, commandKey) == null && !level.getForcedChunks().contains(commandKey),
                     "/forceload remove lets the chunk go, and its record with it");
             helper.succeed();
         } finally {

@@ -1,8 +1,8 @@
 package dev.culprit.config;
 
 import net.minecraft.commands.Commands;
-import net.minecraft.server.permissions.PermissionCheck;
-import net.minecraft.server.permissions.PermissionSet;
+
+
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /** The server's settings for Culprit (DESIGN §5.5): who may scan, and how long a scan may last. */
@@ -34,20 +34,17 @@ public final class CulpritServerConfig {
 
     private CulpritServerConfig() {}
 
-    /** The check a command source or player must pass to scan. */
-    public static PermissionCheck scanCheck() {
-        int level = SPEC.isLoaded() ? SCAN_LEVEL.get() : 2;
-        return switch (level) {
-            case 0 -> Commands.LEVEL_ALL;
-            case 1 -> Commands.LEVEL_MODERATORS;
-            case 3 -> Commands.LEVEL_ADMINS;
-            case 4 -> Commands.LEVEL_OWNERS;
-            default -> Commands.LEVEL_GAMEMASTERS;
-        };
+    public static int scanLevel() {
+        return SPEC.isLoaded() ? SCAN_LEVEL.get() : 2;
     }
 
-    public static boolean mayScan(PermissionSet permissions) {
-        return scanCheck().check(permissions);
+    /** Whether a command's source may scan: 1.21.1's permission levels (main checks 26.x's permission sets). */
+    public static boolean mayScan(net.minecraft.commands.CommandSourceStack source) {
+        return source.hasPermission(scanLevel());
+    }
+
+    public static boolean mayScan(net.minecraft.world.entity.player.Player player) {
+        return player.hasPermissions(scanLevel());
     }
 
     public static int maxSeconds() {

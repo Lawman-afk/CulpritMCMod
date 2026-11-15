@@ -18,7 +18,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.CommandBlock;
 import net.minecraft.world.level.saveddata.SavedData;
-import net.minecraft.world.level.saveddata.SavedDataType;
+import dev.culprit.port.SavedDataType;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -47,9 +47,14 @@ public final class ForcedBy extends SavedData {
 
     public ForcedBy() {}
 
+    @Override
+    public net.minecraft.nbt.CompoundTag save(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
+        return TYPE.save(this, tag, registries);
+    }
+
     private ForcedBy(List<Entry> entries) {
         for (Entry entry : entries) {
-            by.put(ChunkPos.pack(entry.x, entry.z), entry.by);
+            by.put(ChunkPos.asLong(entry.x, entry.z), entry.by);
         }
     }
 
@@ -68,7 +73,7 @@ public final class ForcedBy extends SavedData {
 
     /** The record for a chunk of a level, or null when there is none (never forced so, or before Culprit was there). */
     public static @Nullable String of(ServerLevel level, long chunk) {
-        ForcedBy record = level.getDataStorage().get(TYPE);
+        ForcedBy record = TYPE.find(level);
         return record == null ? null : record.by.get(chunk);
     }
 
@@ -89,17 +94,17 @@ public final class ForcedBy extends SavedData {
     /** A chunk's forced ticket was added or taken away (the game's own call said it changed). */
     public static void changed(ServerLevel level, ChunkPos pos, boolean forced) {
         try {
-            long key = pos.pack();
+            long key = pos.toLong();
             if (forced) {
                 // (past the forcing itself: the server level and its chunk source)
                 String who = commandBy != null ? COMMAND + commandBy : Callers.of(name -> name.startsWith("net.minecraft.server.level."));
                 if (who != null) {
-                    ForcedBy record = level.getDataStorage().computeIfAbsent(TYPE);
+                    ForcedBy record = TYPE.get(level);
                     record.by.put(key, who);
                     record.setDirty();
                 }
             } else {
-                ForcedBy record = level.getDataStorage().get(TYPE);
+                ForcedBy record = TYPE.find(level);
                 if (record != null && record.by.remove(key) != null) {
                     record.setDirty();
                 }
@@ -137,7 +142,7 @@ public final class ForcedBy extends SavedData {
         if (by.startsWith(COMMAND)) {
             return "/forceload by " + by.substring(COMMAND.length());
         }
-        if (by.equals(Callers.GAME + "TestInstanceBlockEntity")) {
+        if (by.equals(Callers.GAME + "StructureUtils")) {
             return "the game's test structures";
         }
         return Callers.describe(by) + ": forced chunk";

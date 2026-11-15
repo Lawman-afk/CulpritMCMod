@@ -38,7 +38,7 @@ abstract class SodiumChunksFrameMixin {
         }
     }
 
-    @Inject(require = 0, method = "processChunkBuilds", at = @At("HEAD"))
+    @Inject(require = 0, method = "uploadChunks", at = @At("HEAD"))
     private void culprit$takeBegin(CallbackInfo ci) {
         culprit$taking = FrameProbe.measuring();
         if (culprit$taking) {
@@ -46,7 +46,7 @@ abstract class SodiumChunksFrameMixin {
         }
     }
 
-    @Inject(require = 0, method = "processChunkBuilds", at = @At("RETURN"))
+    @Inject(require = 0, method = "uploadChunks", at = @At("RETURN"))
     private void culprit$takeEnd(CallbackInfo ci) {
         if (culprit$taking) {
             culprit$taking = false;

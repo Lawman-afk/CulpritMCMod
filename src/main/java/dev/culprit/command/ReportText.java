@@ -161,15 +161,15 @@ public final class ReportText {
 
     /** "at 120, 64, -30 in overworld", a click teleporting there when {@code teleport}. */
     static Component place(ResourceKey<Level> level, BlockPos pos, boolean teleport) {
-        String dim = level.identifier().getNamespace().equals("minecraft") ? level.identifier().getPath() : level.identifier().toString();
+        String dim = level.location().getNamespace().equals("minecraft") ? level.location().getPath() : level.location().toString();
         MutableComponent text = tr("report.at", "at %s, %s, %s in %s", pos.getX(), pos.getY(), pos.getZ(), dim);
         if (!teleport) {
             return text.withStyle(ChatFormatting.GRAY);
         }
-        String command = "/execute in " + level.identifier() + " run tp @s " + pos.getX() + " " + (pos.getY() + 1) + " " + pos.getZ();
+        String command = "/execute in " + level.location() + " run tp @s " + pos.getX() + " " + (pos.getY() + 1) + " " + pos.getZ();
         return text.withStyle(Style.EMPTY.withColor(ChatFormatting.AQUA).withUnderlined(true)
-                .withClickEvent(new ClickEvent.RunCommand(command))
-                .withHoverEvent(new HoverEvent.ShowText(tr("report.teleport", "Click to teleport there"))));
+                .withClickEvent(new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.RUN_COMMAND, command))
+                .withHoverEvent(new net.minecraft.network.chat.HoverEvent(net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT, tr("report.teleport", "Click to teleport there"))));
     }
 
     static <T> int count(List<T> list, int wanted) {

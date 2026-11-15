@@ -10,6 +10,8 @@
     "ServerChunkCacheMixin",
     "MinecraftServerMixin",
     "ChunkMapAccessor",
+    "DistanceManagerAccessor",
+    "TicketOwnerAccessor",
     "ForcedChunkMixin",
     "ForceLoadCommandMixin",
     "PassingRequestMixin"
@@ -24,8 +26,6 @@
     "ParticleEngineMixin",
     "ParticleFrameMixin",
     "QuadParticleFrameMixin",
-    "SubmitNodeFrameMixin",
-    "PreparedFrameMixin",
     "SodiumFrameMixin",
     "SodiumChunksFrameMixin",
     "IrisShadowFrameMixin",

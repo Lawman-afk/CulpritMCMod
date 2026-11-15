@@ -3,19 +3,18 @@ package dev.culprit.client;
 import dev.culprit.report.Names;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import java.util.OptionalDouble;
 
 import org.joml.Matrix4f;
 import org.joml.Matrix4fStack;
 import org.joml.Quaternionf;
 import org.jspecify.annotations.Nullable;
 
-import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexSorting;
 
 import dev.culprit.command.ReportText;
 import dev.culprit.net.ReportData;
@@ -23,17 +22,15 @@ import dev.culprit.scan.Kind;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.culprit.port.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.SubmitNodeStorage;
-import net.minecraft.client.renderer.feature.CustomFeatureRenderer;
-import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.FogRenderer;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
-import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ClipContext;
@@ -55,7 +52,7 @@ import net.neoforged.neoforge.common.NeoForge;
  * <p>
  * Drawn after the level, into the finished picture, depth tested against it, the way Ground Burst draws its effects:
  * a shader pack or Distant Horizons cannot draw over it or change its look. The boxes and outlines are gathered into
- * arrays each frame and drawn by two geometry renderers made once.
+ * arrays each frame and drawn through the game's buffers, a render type per line width.
  */
 public final class Overlay {
     /** How far from the camera things are boxed, and labelled; chunks within this many chunks get their outline. */
@@ -75,8 +72,23 @@ public final class Overlay {
     private static @Nullable BlockPos markedPos;
     private static @Nullable String markedLabel;
 
-    private static final SubmitNodeStorage STORAGE = new SubmitNodeStorage();
-    private static @Nullable FeatureRenderDispatcher dispatcher;
+    /** 1.21.1 has no line width per vertex: the lines are drawn a width at a time, each width its own render type. */
+    private static final float[] WIDTHS = {1.5f, 2f, 2.5f, 3f, 3.5f, 4f, 4.5f};
+    private static final RenderType[] LINE_TYPES = new RenderType[WIDTHS.length];
+    private static final RenderType FILL_TYPE = Types.fills();
+    private static final RenderType BACKING = Types.backing(false), BACKING_SEE_THROUGH = Types.backing(true);
+    private static int drawingWidth;
+    // Drawing has begun this frame: the view, projection and fog to put back.
+    private static boolean begun;
+    private static final Matrix4f PROJECTION = new Matrix4f();
+    private static VertexSorting sorting = VertexSorting.DISTANCE_TO_ORIGIN;
+    private static float fogStart;
+
+    static {
+        for (int i = 0; i < WIDTHS.length; i++) {
+            LINE_TYPES[i] = Types.lines(WIDTHS[i]);
+        }
+    }
     private static final PoseStack IDENTITY = new PoseStack();
     private static final PoseStack LABEL = new PoseStack();
     private static final Matrix4f FACING = new Matrix4f();
@@ -115,13 +127,10 @@ public final class Overlay {
     /** Per sent thing, its label lines, made on first use. */
     private static FormattedCharSequence @Nullable [] labelName, labelCost;
 
-    private static final SubmitNodeCollector.CustomGeometryRenderer LINES = Overlay::lines;
-    private static final SubmitNodeCollector.CustomGeometryRenderer FILLS = Overlay::fills;
-
     private Overlay() {}
 
     public static void register() {
-        NeoForge.EVENT_BUS.addListener(Overlay::draw);
+        NeoForge.EVENT_BUS.addListener(Overlay::stage);
     }
 
     public static boolean shown() {
@@ -172,7 +181,7 @@ public final class Overlay {
         markedLoader = sources;
     }
 
-    private static void draw(RenderLevelStageEvent.AfterLevel event) {
+    private static void draw(RenderLevelStageEvent event) {
         int minutes = dev.culprit.config.CulpritClientConfig.hideAfterMinutes();
         if (shown && minutes > 0 && System.currentTimeMillis() - shownAtMillis > minutes * 60_000L) {
             shown = false;                                      // (the player's setting: hidden after a while)
@@ -188,21 +197,20 @@ public final class Overlay {
         if (!shown || r == null || mc.level == null || mc.player == null) {
             return;
         }
-        int dim = dimIndex(r, mc.level.dimension().identifier().toString());
+        int dim = dimIndex(r, mc.level.dimension().location().toString());
         if (dim < 0) {
             return;
         }
-        var camera = event.getLevelRenderState().cameraRenderState;
-        Vec3 cam = camera.pos;
-        camera.orientation.transform(FORWARD.set(0, 0, -1));
+        var camera = event.getCamera();
+        Vec3 cam = camera.getPosition();
+        camera.rotation().transform(FORWARD.set(0, 0, -1));
         gather(r, dim, mc.level, cam);
         if (boxes == 0 && tiles == 0 && !beam) {
             return;
         }
-        STORAGE.order(0).afterTerrain.submit(new CustomFeatureRenderer.Submit(IDENTITY.last(), RenderTypes.debugQuads(), FILLS));
-        STORAGE.order(0).afterTerrain.submit(new CustomFeatureRenderer.Submit(IDENTITY.last(), RenderTypes.linesTranslucent(), LINES));
-        labels(r, dim, mc, cam, camera.orientation);
-        render(mc, event);
+        begin(event);
+        shapes();
+        labels(r, dim, mc, cam, camera.rotation());
     }
 
     /** This frame's boxes, chunk outlines and beam, costliest first, near the camera. */
@@ -301,20 +309,20 @@ public final class Overlay {
      * the busier it is), the chunks of the loader picked in the results thick and white, and the loaders that are not
      * players named over their chunks.
      */
-    private static void drawChunks(RenderLevelStageEvent.AfterLevel event) {
+    private static void drawChunks(RenderLevelStageEvent event) {
         Minecraft mc = Minecraft.getInstance();
         dev.culprit.net.ChunkData data = ClientReport.chunksData();
         if (!shown || data == null || mc.level == null) {
             return;
         }
-        String here = mc.level.dimension().identifier().toString();
+        String here = mc.level.dimension().location().toString();
         dev.culprit.net.ChunkData.Dim d = data.dims.stream().filter(x -> x.dim.equals(here)).findFirst().orElse(null);
         if (d == null) {
             return;
         }
-        var camera = event.getLevelRenderState().cameraRenderState;
-        Vec3 cam = camera.pos;
-        camera.orientation.transform(FORWARD.set(0, 0, -1));
+        var camera = event.getCamera();
+        Vec3 cam = camera.getPosition();
+        camera.rotation().transform(FORWARD.set(0, 0, -1));
         ClientLevel level = mc.level;
         chunkMode = true;
         boxes = 0;
@@ -348,11 +356,11 @@ public final class Overlay {
         if (tiles == 0) {
             return;
         }
-        STORAGE.order(0).afterTerrain.submit(new CustomFeatureRenderer.Submit(IDENTITY.last(), RenderTypes.debugQuads(), FILLS));
-        STORAGE.order(0).afterTerrain.submit(new CustomFeatureRenderer.Submit(IDENTITY.last(), RenderTypes.linesTranslucent(), LINES));
+        begin(event);
+        shapes();
         // The loaders that are not players, named over their chunk.
         Font font = mc.font;
-        Quaternionf facing = camera.orientation;
+        Quaternionf facing = camera.rotation();
         placed = 0;
         facing.transform(RIGHT.set(1, 0, 0));
         facing.transform(UP.set(0, 1, 0));
@@ -376,7 +384,6 @@ public final class Overlay {
                 named++;
             }
         }
-        render(mc, event);
     }
 
     /** How far along the crosshair's ray it enters a box, or -1 when it misses (or the box is out of range). */
@@ -636,10 +643,9 @@ public final class Overlay {
         LABEL.mulPose(FACING.rotation(facing));
         LABEL.scale(scale, -scale, scale);
         int bg = 0x99101216;
-        STORAGE.order(0).submitText(LABEL, -font.width(first) / 2f, second == null ? 0 : -10, first, false, mode, LightCoordsUtil.FULL_BRIGHT,
-                0xFFFFFFFF, bg, 0);
+        labelLine(font, first, -font.width(first) / 2f, second == null ? 0 : -10, mode, bg);
         if (second != null) {
-            STORAGE.order(0).submitText(LABEL, -font.width(second) / 2f, 0, second, false, mode, LightCoordsUtil.FULL_BRIGHT, 0xFFFFFFFF, bg, 0);
+            labelLine(font, second, -font.width(second) / 2f, 0, mode, bg);
         }
         LABEL.popPose();
         return true;
@@ -652,7 +658,7 @@ public final class Overlay {
     public static void drawReadout(GuiGraphicsExtractor g, DeltaTracker delta) {
         ReportData r = report;
         Minecraft mc = Minecraft.getInstance();
-        if (!shown || r == null || mc.gui.hud.isHidden() || mc.gui.screen() != null || lookThing < 0 || lookThing >= r.things) {
+        if (!shown || r == null || mc.options.hideGui || mc.screen != null || lookThing < 0 || lookThing >= r.things) {
             return;
         }
         long key = lookThing;
@@ -697,26 +703,136 @@ public final class Overlay {
                         .withColor(0xC8C8C8)).getVisualOrderText();
     }
 
-    /** Draws what was submitted into the finished picture (Ground Burst's way, DESIGN §6). */
-    private static void render(Minecraft mc, RenderLevelStageEvent.AfterLevel event) {
-        if (dispatcher == null) {
-            dispatcher = new FeatureRenderDispatcher(mc.gameRenderer.renderBuffers(), mc.getModelManager(), mc.getAtlasManager(), mc.font,
-                    mc.gameRenderer.gameRenderState());
+    /**
+     * Drawn after the level, at NeoForge's after-level stage, which 1.21.1 fires once the level's drawing has returned
+     * (after a shader pack's last passes and Distant Horizons' far terrain): into the finished picture, depth tested
+     * against it, the way Ground Burst draws its effects there. The stage's own view and projection (Iris moves the
+     * view's bobbing between them), and no fog: the boxes and labels are to be read, not seen in the world.
+     */
+    private static void stage(RenderLevelStageEvent event) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL) {
+            return;
         }
+        try {
+            draw(event);
+        } finally {
+            end();
+        }
+    }
+
+    private static MultiBufferSource.BufferSource buffers() {
+        return Minecraft.getInstance().renderBuffers().bufferSource();
+    }
+
+    private static void begin(RenderLevelStageEvent event) {
+        if (begun) {
+            return;
+        }
+        begun = true;
+        PROJECTION.set(RenderSystem.getProjectionMatrix());
+        sorting = RenderSystem.getVertexSorting();
+        RenderSystem.setProjectionMatrix(event.getProjectionMatrix(), VertexSorting.DISTANCE_TO_ORIGIN);
         Matrix4fStack modelView = RenderSystem.getModelViewStack();
         modelView.pushMatrix();
         modelView.mul(event.getModelViewMatrix());
-        try (FeatureRenderDispatcher.PreparedFrame frame = dispatcher.prepareFrame(STORAGE)) {
-            if (!frame.isEmpty()) {
-                RenderTarget main = mc.gameRenderer.mainRenderTarget();
-                try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Culprit overlay",
-                        main.getColorTextureView(), Optional.empty(), main.getDepthTextureView(), OptionalDouble.empty())) {
-                    RenderSystem.bindDefaultUniforms(pass);
-                    FeatureRenderDispatcher.renderAllFeatures(pass, frame);
-                }
-            }
+        RenderSystem.applyModelViewMatrix();
+        fogStart = RenderSystem.getShaderFogStart();
+        FogRenderer.setupNoFog();
+        Minecraft.getInstance().getMainRenderTarget().bindWrite(false);
+    }
+
+    /** This frame's boxes, outlines and beam: the faint fills first, then the lines a width at a time. */
+    private static void shapes() {
+        MultiBufferSource.BufferSource buffers = buffers();
+        fills(IDENTITY.last(), buffers.getBuffer(FILL_TYPE));
+        for (drawingWidth = 0; drawingWidth < WIDTHS.length; drawingWidth++) {
+            lines(IDENTITY.last(), buffers.getBuffer(LINE_TYPES[drawingWidth]));
+        }
+    }
+
+    /**
+     * A label's line: its backing first, then its text. (1.21.1's font draws a line's backing after its text, a hair
+     * behind it, which at a label's distance from the camera covered the text in part.)
+     */
+    private static void labelLine(Font font, FormattedCharSequence line, float x, float y, Font.DisplayMode mode, int backing) {
+        Matrix4f pose = LABEL.last().pose();
+        float x1 = x + font.width(line) + 1;
+        VertexConsumer b = buffers().getBuffer(mode == Font.DisplayMode.SEE_THROUGH ? BACKING_SEE_THROUGH : BACKING);
+        b.addVertex(pose, x - 1, y - 1, 0).setColor(backing);
+        b.addVertex(pose, x - 1, y + 9, 0).setColor(backing);
+        b.addVertex(pose, x1, y + 9, 0).setColor(backing);
+        b.addVertex(pose, x1, y - 1, 0).setColor(backing);
+        font.drawInBatch(line, x, y, 0xFFFFFFFF, false, pose, buffers(), mode, 0, LightTexture.FULL_BRIGHT);
+    }
+
+    private static void end() {
+        if (!begun) {
+            return;
+        }
+        begun = false;
+        try {
+            buffers().endBatch();
         } finally {
-            modelView.popMatrix();
+            RenderSystem.getModelViewStack().popMatrix();
+            RenderSystem.applyModelViewMatrix();
+            RenderSystem.setProjectionMatrix(PROJECTION, sorting);
+            RenderSystem.setShaderFogStart(fogStart);
+        }
+    }
+
+    /** The overlay's render types: the lines a width each, growing with the window as the game's own; fills writing no depth. */
+    private abstract static class Types extends RenderType {
+        private Types() {
+            super("", DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 0, false, false, () -> {}, () -> {});
+        }
+
+        static RenderType lines(float width) {
+            return create(dev.culprit.Culprit.MODID + "_lines_" + width, DefaultVertexFormat.POSITION_COLOR_NORMAL, VertexFormat.Mode.LINES, 1536,
+                    false, false, CompositeState.builder()
+                            .setShaderState(RENDERTYPE_LINES_SHADER)
+                            .setLineState(new Width(width))
+                            .setLayeringState(VIEW_OFFSET_Z_LAYERING)
+                            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                            .setWriteMaskState(COLOR_WRITE)
+                            .setCullState(NO_CULL)
+                            .createCompositeState(false));
+        }
+
+        static RenderType fills() {
+            return create(dev.culprit.Culprit.MODID + "_fills", DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 1536, false, true,
+                    CompositeState.builder()
+                            .setShaderState(POSITION_COLOR_SHADER)
+                            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                            .setWriteMaskState(COLOR_WRITE)
+                            .setCullState(NO_CULL)
+                            .createCompositeState(false));
+        }
+
+        /** A label's backing, seen through walls with its label or not. */
+        static RenderType backing(boolean seeThrough) {
+            return create(dev.culprit.Culprit.MODID + (seeThrough ? "_label_backing_see_through" : "_label_backing"), DefaultVertexFormat.POSITION_COLOR,
+                    VertexFormat.Mode.QUADS, 256, false, false, CompositeState.builder()
+                            .setShaderState(POSITION_COLOR_SHADER)
+                            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                            .setDepthTestState(seeThrough ? NO_DEPTH_TEST : LEQUAL_DEPTH_TEST)
+                            .setWriteMaskState(COLOR_WRITE)
+                            .setCullState(NO_CULL)
+                            .createCompositeState(false));
+        }
+
+        /** A line width in pixels at 1920 across, wider on a wider window (the game's own lines' rule). */
+        private static final class Width extends LineStateShard {
+            private final float width;
+
+            Width(float width) {
+                super(java.util.OptionalDouble.of(width));
+                this.width = width;
+            }
+
+            @Override
+            public void setupRenderState() {
+                RenderSystem.lineWidth(Math.max(this.width, Minecraft.getInstance().getWindow().getWidth() / 1920f * this.width));
+            }
         }
     }
 
@@ -747,6 +863,9 @@ public final class Overlay {
     }
 
     private static void line(VertexConsumer b, PoseStack.Pose p, float x0, float y0, float z0, float x1, float y1, float z1, int c, float w) {
+        if (Mth.clamp(Math.round(w * 2) - 3, 0, WIDTHS.length - 1) != drawingWidth) {
+            return;                                     // (drawn with its width's render type)
+        }
         float dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
         float len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (len < 1e-6f) {
@@ -755,8 +874,8 @@ public final class Overlay {
         dx /= len;
         dy /= len;
         dz /= len;
-        b.addVertex(p, x0, y0, z0).setColor(c).setNormal(p, dx, dy, dz).setLineWidth(w);
-        b.addVertex(p, x1, y1, z1).setColor(c).setNormal(p, dx, dy, dz).setLineWidth(w);
+        b.addVertex(p, x0, y0, z0).setColor(c).setNormal(p, dx, dy, dz);
+        b.addVertex(p, x1, y1, z1).setColor(c).setNormal(p, dx, dy, dz);
     }
 
     private static void cube(VertexConsumer b, PoseStack.Pose p, float x0, float y0, float z0, float x1, float y1, float z1, int c) {

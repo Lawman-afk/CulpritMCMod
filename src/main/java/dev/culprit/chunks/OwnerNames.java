@@ -9,7 +9,7 @@ import java.util.UUID;
 import dev.culprit.Culprit;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -32,7 +32,7 @@ final class OwnerNames {
     }
 
     /** A mod's own kind of loading ticket: "Create: contraption". */
-    static String ticketType(Identifier id) {
+    static String ticketType(ResourceLocation id) {
         return mod(id.getNamespace()) + ": " + id.getPath().replace('_', ' ');
     }
 
@@ -66,8 +66,9 @@ final class OwnerNames {
         if (team != null) {
             return "team " + team;
         }
-        var known = server.services().nameToIdCache().get(id);
-        return known.isPresent() ? known.get().name() : "owner " + id.toString().substring(0, 8);
+        var cache = server.getProfileCache();
+        var known = cache == null ? java.util.Optional.<com.mojang.authlib.GameProfile>empty() : cache.get(id);
+        return known.isPresent() ? known.get().getName() : "owner " + id.toString().substring(0, 8);
     }
 
     /**

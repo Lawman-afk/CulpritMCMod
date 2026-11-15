@@ -13,7 +13,7 @@ import dev.culprit.net.ChunkData;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import dev.culprit.port.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.ChunkPos;
 
@@ -74,13 +74,13 @@ final class ChunksPanel {
         if (data != groupsFor) {
             groupsFor = data;
             picked = null;
-            String here = mc.level.dimension().identifier().toString();
+            String here = mc.level.dimension().location().toString();
             dim = data.dims.stream().filter(d -> d.dim.equals(here)).findFirst().orElse(null);
             groups = dim == null ? List.of() : groups(dim);
             chunkIndex.clear();
             if (dim != null) {
                 for (int i = 0; i < dim.chunks; i++) {
-                    chunkIndex.put(ChunkPos.pack(dim.x[i], dim.z[i]), i);
+                    chunkIndex.put(ChunkPos.asLong(dim.x[i], dim.z[i]), i);
                 }
             }
         }
@@ -176,7 +176,7 @@ final class ChunksPanel {
 
     private void drawMap(GuiGraphicsExtractor g, ChunkData.Dim d, int mouseX, int mouseY) {
         Minecraft mc = Minecraft.getInstance();
-        int pcx = mc.player == null ? 0 : mc.player.chunkPosition().x(), pcz = mc.player == null ? 0 : mc.player.chunkPosition().z();
+        int pcx = mc.player == null ? 0 : mc.player.chunkPosition().x, pcz = mc.player == null ? 0 : mc.player.chunkPosition().z;
         int radius = 4;
         for (int i = 0; i < d.chunks; i++) {
             radius = Math.max(radius, Math.max(Math.abs(d.x[i] - pcx), Math.abs(d.z[i] - pcz)));

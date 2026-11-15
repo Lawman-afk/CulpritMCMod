@@ -133,8 +133,8 @@ abstract class ServerLevelTickMixin {
 
     /** A fluid's random tick (lava setting fire), charged as a block's is. */
     @WrapOperation(method = "tickChunk", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/world/level/material/FluidState;randomTick(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/util/RandomSource;)V"))
-    private void culprit$timeFluidRandomTick(FluidState state, ServerLevel level, BlockPos pos, RandomSource random, Operation<Void> original) {
+            target = "Lnet/minecraft/world/level/material/FluidState;randomTick(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/util/RandomSource;)V"))
+    private void culprit$timeFluidRandomTick(FluidState state, net.minecraft.world.level.Level level, BlockPos pos, RandomSource random, Operation<Void> original) {
         if (!Probe.measuring()) {
             original.call(state, level, pos, random);
             return;
@@ -143,7 +143,7 @@ abstract class ServerLevelTickMixin {
         try {
             original.call(state, level, pos, random);
         } finally {
-            Probe.randomTick(level, pos, state.getType(), Probe.end(start));
+            Probe.randomTick((ServerLevel) level, pos, state.getType(), Probe.end(start));
         }
     }
 
