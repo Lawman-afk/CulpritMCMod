@@ -263,7 +263,10 @@ def corner_tape(img: Image.Image, at: float, steps: int = 8) -> Image.Image:
     two ends running off the logo's edges as Ground Burst's tape does."""
     img = img.copy()
     seen = (2 * N - 2 * N * at) * math.sqrt(2)          # its length from the bottom edge to the right edge
-    w, h = round(seen + N * 0.07), round(N * 0.05)
+    h = round(N * 0.05)
+    # Each end is cut on the slant across a tape's width of its length: longer by that and more at both ends, so the
+    # tape meets the bottom and right edges whole (the user: the stripe stopped short of the bottom).
+    w = round(seen + N * 0.07 + 2.4 * h)
     tape = S.heat_stripe(w, h, steps=steps, gap=h * 0.32, slant=1.0).rotate(45, resample=Image.BICUBIC, expand=True)
     c = N * at
     layer = Image.new("RGBA", (N, N), (0, 0, 0, 0))
