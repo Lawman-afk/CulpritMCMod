@@ -15,7 +15,8 @@ import org.spongepowered.asm.mixin.Mixin;
  */
 @Mixin(ForceLoadCommand.class)
 abstract class ForceLoadCommandMixin {
-    @WrapMethod(method = "changeForceLoad", require = 0)
+    @WrapMethod(method = "changeForceLoad(Lnet/minecraft/commands/CommandSourceStack;Lnet/minecraft/server/level/ColumnPos;Lnet/minecraft/server/level/ColumnPos;Z)I",
+            require = 0)
     private static int culprit$whoForces(CommandSourceStack source, ColumnPos from, ColumnPos to, boolean add, Operation<Integer> original) {
         ForcedBy.commandStarts(source);
         try {

@@ -31,7 +31,7 @@ import org.spongepowered.asm.mixin.injection.At;
  */
 @Mixin(LevelRenderer.class)
 abstract class LevelRendererFrameMixin {
-    @WrapMethod(require = 0, method = "submitFeatures")
+    @WrapMethod(require = 0, method = "submitFeatures(Lnet/minecraft/client/renderer/state/level/LevelRenderState;Lnet/minecraft/client/renderer/SubmitNodeCollector;Z)V")
     private void culprit$submit(LevelRenderState state, SubmitNodeCollector collector, boolean outline, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(state, collector, outline);
@@ -124,7 +124,7 @@ abstract class LevelRendererFrameMixin {
         }
     }
 
-    @WrapMethod(require = 0, method = "compileSections")
+    @WrapMethod(require = 0, method = "compileSections(Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V")
     private void culprit$chunks(CameraRenderState camera, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(camera);

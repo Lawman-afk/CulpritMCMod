@@ -16,8 +16,8 @@ import org.spongepowered.asm.mixin.Mixin;
  */
 @Mixin(FeatureRenderDispatcher.PreparedFrame.class)
 abstract class PreparedFrameMixin {
-    @WrapMethod(require = 0, method = {"executeSolid", "executeTranslucent", "executeWaterMask", "executeOutline", "executeTranslucentAfterTerrain",
-            "executeSeeThrough", "executeAlwaysOnTop"})
+    @WrapMethod(require = 0, method = {"executeSolid(Lcom/mojang/renderpearl/api/commands/RenderPass;)V", "executeTranslucent(Lcom/mojang/renderpearl/api/commands/RenderPass;)V", "executeWaterMask(Lcom/mojang/renderpearl/api/commands/RenderPass;)V", "executeOutline(Lcom/mojang/renderpearl/api/commands/RenderPass;)V",
+            "executeTranslucentAfterTerrain(Lcom/mojang/renderpearl/api/commands/RenderPass;)V", "executeSeeThrough(Lcom/mojang/renderpearl/api/commands/RenderPass;)V", "executeAlwaysOnTop(Lcom/mojang/renderpearl/api/commands/RenderPass;)V"})
     private void culprit$draw(RenderPass pass, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(pass);
@@ -31,7 +31,7 @@ abstract class PreparedFrameMixin {
         }
     }
 
-    @WrapMethod(require = 0, method = "executeOit")
+    @WrapMethod(require = 0, method = "executeOit(Lnet/minecraft/client/renderer/oit/OitStage;Lcom/mojang/renderpearl/api/commands/RenderPass;)V")
     private void culprit$drawOit(OitStage stage, RenderPass pass, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(stage, pass);
