@@ -1,19 +1,20 @@
-"""Culprit's logo (the mod page's square avatar): an original pixel-art magnifying glass holding one of Culprit's boxes,
+"""Culprit's first logo, in pixels (since replaced: the user chose a clean one, logos_flat.py's "line, hot box", for the
+utility look), kept with its pieces that logos_flat.py still uses (the ground, the stripe across the corner, the sheet):
+an original pixel-art magnifying glass holding one of Culprit's boxes,
 the costliest kind, glowing in the cost scale's hottest colours, on a dark ground with the scale as a tape behind it,
 the way Ground Burst's logo lays its glowing missile over a hazard tape (Ground Burst's tools/branding/logos.py).
 
-- tape:  the glass over the cost-scale tape on the dark ground: the mod's logo (docs/branding/logo.png);
+- tape:  the glass over the cost-scale tape on the dark ground;
 - plain: the glass on the dark ground alone;
 - badge: the plain logo in a ring, round, for places that crop avatars to a circle;
-- icon:  the glass alone on transparency (docs/branding/icon.png), for the banner and anything else.
+- icon:  the glass alone on transparency.
 
 The glass is drawn on a 48 x 48 grid, the way Minecraft's own pictures are pixels, and enlarged without smoothing; only
 the glow round the box and the ground are smooth.
 
 Usage: <Ground Burst's tools/.venv>\\Scripts\\python.exe tools\\branding\\logos.py [--out <folder>]
 Writes logo_<name>.png (400 x 400) and logo_<name>_1024.png into the folder (default build/branding/logos), a sheet of
-them at 400, 128 and 48 px (build/branding/logos_sheet.png), the chosen one as docs/branding/logo.png and the glass as
-docs/branding/icon.png.
+them at 400, 128 and 48 px (build/branding/logos_sheet.png). The mod's logo itself is logos_flat.py's.
 """
 import argparse
 import math
@@ -321,10 +322,8 @@ def main():
         logo.save(out / f"logo_{name}_1024.png", optimize=True)
         logo.resize((400, 400), Image.LANCZOS).save(out / f"logo_{name}.png", optimize=True)
     sheet(logos, out.parent / "logos_sheet.png")
-    LOGO.parent.mkdir(parents=True, exist_ok=True)
-    logos[CHOSEN].resize((400, 400), Image.LANCZOS).convert("RGB").save(LOGO, optimize=True)
-    icon.resize((512, 512), Image.NEAREST).save(ICON, optimize=True)
-    print("wrote", ", ".join(logos), "to", out, "and", CHOSEN, "as", LOGO)
+    icon.resize((512, 512), Image.NEAREST).save(out / "icon_pixels.png", optimize=True)
+    print("wrote", ", ".join(logos), "to", out)
 
 
 if __name__ == "__main__":
