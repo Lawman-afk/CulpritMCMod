@@ -14,7 +14,7 @@ ${mod_description}
 [[mixins]]
 config="${mod_id}.mixins.json"
 
-[[mixins]]
+[[mixins]] # dev runs only: the test server's helpers, left out of the released jar
 config="${mod_id}.port.mixins.json"
 
 [[dependencies.${mod_id}]]

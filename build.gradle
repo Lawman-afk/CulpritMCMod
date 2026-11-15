@@ -48,6 +48,12 @@ tasks.named('jar', Jar) {
     // The dev aids (the prepared test world, photographers) and the developer's tests (GameTests and their
     // structures) are for the dev runs only, never in a released jar.
     exclude('dev/culprit/devworld/**', 'dev/culprit/gametest/**', 'data/culprit/structure/gametest/**')
+    // So are this branch's own mixins for the test server (dev/culprit/port/mixin, which only the dev runs apply) and
+    // their config: left out, and the mod file's entry for them (marked "dev runs only") with them.
+    exclude('dev/culprit/port/mixin/**', 'culprit.port.mixins.json')
+    filesMatching('META-INF/neoforge.mods.toml') {
+        filter { String line -> line.contains('dev runs only') || line.contains('.port.mixins.json') ? null : line }
+    }
 }
 
 // Minecraft 1.21.1 runs on Java 21, so this branch targets Java 21.

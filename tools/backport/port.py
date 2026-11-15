@@ -33,6 +33,8 @@ DATA_VERSION = 3955
 # Main's files with no place here.
 DROP = [re.compile(p) for p in (
     r"docs/BACKPORT\.md", r"tools/backport/.*",
+    # Main's photographer for the mod page (devworld/Showcase: real-world pictures, taken on main alone).
+    r"src/main/java/dev/culprit/devworld/Showcase\.java",
     # 26.x's frame pipeline: the parts handed in (SubmitNodeCollector) and the prepared frame's passes (renderpearl).
     # 1.21.1 draws each thing as it goes, and this branch's own frame hooks time that (manual.txt).
     r"src/main/java/dev/culprit/mixin/(SubmitNodeFrameMixin|PreparedFrameMixin)\.java",
@@ -978,9 +980,10 @@ TEXT_FIXES = {
                                                # 26.x's frame pipeline only (DROP).
                                                ('    "SubmitNodeFrameMixin",\n    "PreparedFrameMixin",\n', '')],
     # 1.21.1's mod loader reads which loader the mod is for (26.x's needs no such line).
-    # ... and this branch's own mixins (culprit.port.mixins.json: the test helper counting from the structure's corner).
+    # ... and this branch's own dev-run mixins (culprit.port.mixins.json: the test server's helpers), their entry marked
+    # "dev runs only" so the released jar's mod file leaves it out with them (build.gradle).
     "src/main/templates/META-INF/neoforge.mods.toml": [('license="${mod_license}"', 'modLoader="javafml"\nloaderVersion="[1,)"\nlicense="${mod_license}"'),
-                                                       ('config="${mod_id}.mixins.json"', 'config="${mod_id}.mixins.json"\n\n[[mixins]]\nconfig="${mod_id}.port.mixins.json"')],
+                                                       ('config="${mod_id}.mixins.json"', 'config="${mod_id}.mixins.json"\n\n[[mixins]] # dev runs only: the test server\'s helpers, left out of the released jar\nconfig="${mod_id}.port.mixins.json"')],
     # The frame's parts in 1.21.1's words (scan/FramePhase, report/Breakdown: FILE_FIXES).
     "src/main/resources/assets/culprit/lang/en_us.json": [('"culprit.frame.particles": "Particles, handed in"', '"culprit.frame.particles": "Particles, sent to the GPU"'), ('"culprit.frame.drawing": "Drawing the terrain"', '"culprit.frame.drawing": "Drawing the world"'), ('"culprit.frame.features": "Drawing the handed-in parts"', '"culprit.frame.features": "Drawing the buffered parts"'), ('": "the world\'s blocks, sky and weather in view"', '": "which of the world\'s chunk sections are in view"'), ('": "all of them handed in, and the rarer kinds made ready"', '": "their batches drawn (each kind\'s own share is with it)"'), ('": "terrain, sky and clouds sent to the GPU"', '": "terrain, sky, clouds, weather and your hand sent to the GPU"'), ('": "the sorted parts sent to the GPU (the things\' shares are with them)"', '": "the things\' parts sent to the GPU, a batch at a time"'), ('": "made ready, handed in, their share of the drawing"', '": "each one drawn, its parts buffered for the GPU"'), ('": "chests, signs: made ready, handed in, drawn"', '": "chests, signs: each one drawn"'), ('": "each kind, moved and made ready"', '": "each kind, moved and drawn"')],
 }
