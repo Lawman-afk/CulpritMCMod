@@ -38,7 +38,8 @@ GRIP = [(118, 88, 70), (86, 62, 50), (58, 40, 34), (38, 26, 24)]                
 LENS_C, R_OUT, R_IN = (29.0, 19.0), 14.0, 10.6
 HANDLE_DIR = (-math.sqrt(0.5), math.sqrt(0.5))                                   # toward the bottom left
 LIGHT = (-math.sqrt(0.5), -math.sqrt(0.5))                                       # light from the top left
-BOX, BOX_YAW, BOX_PITCH = 4.8, 40.0, 28.0                                         # the box's half size and turn
+TAPE_AT = 0.77                                                                   # the tape's middle, clear of the lens
+BOX, BOX_YAW, BOX_PITCH = 4.8, 40.0, 28.0                                        # the box's half size and turn
 EDGE = (255, 120, 150)                                                           # its lines: a hot pink, lit
 
 
@@ -239,9 +240,10 @@ def place(back: Image.Image, icon: Image.Image) -> Image.Image:
 
 def tape_logo(icon: Image.Image) -> Image.Image:
     img = ground()
-    w, h = round(N * 1.6), round(N * 0.05)
+    h = round(N * 0.05)
+    w = round((2 * N - 2 * N * TAPE_AT) * math.sqrt(2) + N * 0.07)
     tape = S.heat_tape(w, h, h * 1.6, h * 0.55).rotate(45, resample=Image.BICUBIC, expand=True)
-    cx, cy = N * 0.655, N * 0.655                          # behind the glass toward the bottom-right corner
+    cx, cy = N * TAPE_AT, N * TAPE_AT                      # across the bottom-right corner, clear of the glass
     layer = Image.new("RGBA", (N, N), (0, 0, 0, 0))
     layer.alpha_composite(tape, (round(cx - tape.width / 2), round(cy - tape.height / 2)))
     img.alpha_composite(S.shadow_of(layer, 8, 0.6, (0, 5)))
@@ -252,14 +254,23 @@ def tape_logo(icon: Image.Image) -> Image.Image:
 def scale_logo(icon: Image.Image) -> Image.Image:
     """The tape as the cost scale's legend: blocks from pale yellow to deep magenta, cut on the slant."""
     img = ground()
-    w, h = round(N * 1.5), round(N * 0.05)
-    tape = S.heat_stripe(w, h, steps=14, gap=h * 0.32, slant=1.0).rotate(45, resample=Image.BICUBIC, expand=True)
-    cx, cy = N * 0.655, N * 0.655
+    return place(corner_tape(img, TAPE_AT), icon)
+
+
+def corner_tape(img: Image.Image, at: float, steps: int = 8) -> Image.Image:
+    """The cost scale's tape across the bottom-right corner, its middle at (at, at) of the logo, clear of the glass (the
+    user: the glass had covered the stripe): from the bottom edge to the right edge, pale yellow to deep magenta, its
+    two ends running off the logo's edges as Ground Burst's tape does."""
+    img = img.copy()
+    seen = (2 * N - 2 * N * at) * math.sqrt(2)          # its length from the bottom edge to the right edge
+    w, h = round(seen + N * 0.07), round(N * 0.05)
+    tape = S.heat_stripe(w, h, steps=steps, gap=h * 0.32, slant=1.0).rotate(45, resample=Image.BICUBIC, expand=True)
+    c = N * at
     layer = Image.new("RGBA", (N, N), (0, 0, 0, 0))
-    layer.alpha_composite(tape, (round(cx - tape.width / 2), round(cy - tape.height / 2)))
+    layer.alpha_composite(tape, (round(c - tape.width / 2), round(c - tape.height / 2)))
     img.alpha_composite(S.shadow_of(layer, 8, 0.6, (0, 5)))
     img.alpha_composite(layer)
-    return place(img, icon)
+    return img
 
 
 def badge(icon: Image.Image) -> Image.Image:
