@@ -127,9 +127,6 @@
   "culprit.readout.cost": " a tick, %s of the tick",
   "culprit.chat.spikes": "Lag spikes: %s.",
   "culprit.chat.no_spikes": "No lag spikes.",
-  "culprit.screen.view.average": "Average",
-  "culprit.screen.view.spikes": "Lag spikes",
-  "culprit.screen.view.about": "Average: every tick of the scan. Lag spikes: only the ticks that took over twice the usual tick (and at least 5 ms), to find what makes them slow.",
   "culprit.screen.no_spikes": "No lag spikes in this scan: no tick took over %s (twice the usual %s, and at least 5 ms). The slowest took %s.",
   "culprit.screen.spikes_summary": "%s lag spikes: ticks over %s (twice the usual %s, and at least 5 ms). In them the tick took %s on average and %s at worst. Below, what each part took in them.",
   "culprit.report.spikes": "Lag spikes: %s ticks over %s (twice the usual %s, and at least 5 ms), %s on average; the costliest in them: %s.",
@@ -152,8 +149,6 @@
   "culprit.screen.col.name.frame": "Part of the frame",
   "culprit.screen.col.cost_frame": "Per frame",
   "culprit.screen.col.share_frame": "% of frame",
-  "culprit.screen.view.stutters": "Stutters",
-  "culprit.screen.view.about_frames": "Average: every frame of the scan. Stutters: only the frames that took over twice the usual frame (and at least 20 ms), to find what makes them slow.",
   "culprit.screen.empty_frames": "No frame scan yet. Press %s and pick a length under Frames: what each thing in view costs your frame rate shows here.",
   "culprit.screen.frames_summary": "A frame took %s on average (%s FPS) and %s at worst over %s frames. Below, all of it: what each part took.",
   "culprit.screen.no_stutters": "No stutters in this scan: no frame took over %s (twice the usual %s, and at least 20 ms). The slowest took %s.",
@@ -260,5 +255,12 @@
   "culprit.chat.saved": "Saved the report: %s (and the same as .json).",
   "culprit.chat.save_failed": "Could not save the report: %s",
   "culprit.export.saved": "Saved the report: %s (and the same as .json).",
-  "culprit.export.failed": "Could not save the report: %s"
+  "culprit.export.failed": "Could not save the report: %s",
+  "culprit.screen.view.spikes_only": "Lag spikes only (%s)",
+  "culprit.screen.view.stutters_only": "Stutters only (%s)",
+  "culprit.screen.view.about2": "Ticked: only the lag spikes, the ticks that took over twice the usual tick (and at least 5 ms), to find what makes them slow. Not ticked: every tick of the scan, on average.",
+  "culprit.screen.view.about_frames2": "Ticked: only the stutters, the frames that took over twice the usual frame (and at least 20 ms), to find what makes them slow. Not ticked: every frame of the scan, on average.",
+  "culprit.screen.settings": "Settings",
+  "culprit.screen.settings.about": "How the results show on the world, and the HUD line.",
+  "culprit.screen.settings.title": "Culprit: your settings"
 }

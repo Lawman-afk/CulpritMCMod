@@ -63,7 +63,7 @@ has only Observable and LagLens, 1.21.1 only Observable and Why Loaded).
 - **Results**: for each thing, its mean time per tick over the scan, its worst single tick and its share of the tick;
   folded by type, by mod and by chunk; with dimension and position.
 - **Lag spikes** (2026-11-14): the same scan keeps its slowest ticks whole (the slowest 5 %, 5 to 60 of them); the
-  results' Average / Lag spikes switch shows every list, the bar and the world over the ticks that took over twice
+  results' "Lag spikes only" tick box (at the bar's end, apart from the tabs) shows every list, the bar and the world over the ticks that took over twice
   the scan's usual (median) tick and at least 5 ms, with the averages untouched. The chat gives their count.
 - **Started** from the scan menu (F8: 10, 30 or 60 seconds, or stop) or by `/culprit scan [seconds]` (10 by default,
   5 to the server's longest, 120 by default); operators by default (the server's config). The chat says when a scan
@@ -226,7 +226,8 @@ fine (§2).
   largest result.
 - Client: the colour scale, labels, through walls, how long the overlay stays, the HUD line.
 - **Built (2026-11-15)**: the player's own settings (config/culprit-client.toml, and Config in the mod list, NeoForge's
-  own screen, one page): how far things are boxed (16 to 128 blocks, 64), how many are labelled (0 to 30, 12), minutes after which
+  own screen, one page, opened by the results screen's Settings button in its top right corner, and by Config in the
+  mod list): how far things are boxed (16 to 128 blocks, 64), how many are labelled (0 to 30, 12), minutes after which
   the results hide themselves (0, never), the HUD line and its corner. The server's (who may scan, the longest scan) show
   on the same screen in one's own world. Left out: a second colour scale (the one there reads for colour-blind players),
   boxes through walls (the game's line and quad kinds all test depth; the picked thing's beam and label already show
@@ -282,3 +283,4 @@ cost nothing); ModernFix.
 | 2026-11-15 | The frame scan with Sodium and Iris (the plan's next step). Sodium on 26.3 replaces the game's block-entity gathering and chunk-mesh building, so the frame scan saw no block entities with it: its own methods are hooked the same way, by name, only when Sodium is there (`@Pseudo`, optional). Iris's shadow pass becomes its own part, "Shader shadows", and what each thing costs for its shadow is the thing's, since a mob's shadow is drawn because of the mob. Hooks into other mods are written against the game's types only (their own classes are named as strings), so Culprit needs neither mod to build or run. |
 | 2026-11-15 | Settings and the HUD line (the plan's next step). The player's settings are the ones that change what they see: range, labels, hiding after a while, the HUD line. NeoForge's own config screen shows them, with no screen of our own to keep. The HUD line reads one's own world directly and asks any other server, which sends only to players who asked and may scan, once a second. Distant Horizons' far terrain is its own part of the frame (it had been counted as drawing the terrain: 1.42 ms of the Lab's frame with DH against 0.19 ms without). The hooks into other mods are now applied only when the mod is installed, so a game without them logs no warnings. |
 | 2026-11-15 | Reports as files (§4.4): a Markdown page to read and paste where a pack's makers will see it, and JSON for tools, both made from the report as the client holds it, so the server's `/culprit export` and the results screen's Save report write the same thing (the page names things as the game does, in English on a server). The name-giving and the parts of the tick or frame moved from the client to a common package for it. |
+| 2026-11-15 | After the user's look: "Change the average versus lag spikes menu button to not be in the same place, and look like a selectable catergoy, because it is confusing. Also I cant find this settings page. Please place it in the F9 menu instead." The switch sat at the end of the tab row and read as a sixth tab; it is now a tick box, "Lag spikes only (4)" ("Stutters only" for frames), at the bar's end under the headline, since it changes what the headline, the bar and every tab cover. Settings is a button in the results screen's top right corner, after the search box (in the bottom row six buttons no longer fit a 1280×720 window at the game's own scale, and beside the sections it would read as a fourth section); it opens the settings page and returns to the results. Config in the mod list opens the same page. |

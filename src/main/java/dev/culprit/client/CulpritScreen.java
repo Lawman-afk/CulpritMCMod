@@ -20,6 +20,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
@@ -61,9 +62,11 @@ public final class CulpritScreen extends Screen {
     private int picked = -1;
     private int left, top, right, bottom, listTop, listBottom;
     /** The header's layout for this window and report: the summary's lines, the bar, the key's entries and rows (init). */
-    private int summaryLines = 2, barY, searchLeft, sectionRight;
+    private int summaryLines = 2, barY, barW, searchLeft, sectionRight;
     /** The bar of the tick's height: its key is written inside it. */
     private static final int BAR_H = 11;
+    /** The bar's row: as tall as the Lag spikes only switch at its end. */
+    private static final int VIEW_H = 17;
     private @Nullable ReportData layoutData;
     private boolean layoutSpikes, layoutFrames, layoutChunks;
     private dev.culprit.net.@Nullable ChunkData layoutChunkData;
@@ -104,8 +107,8 @@ public final class CulpritScreen extends Screen {
         bottom = this.height - 8;
         int inner = right - left - 16;
         // The header follows the window, the report and the view (a new one lays it out again): the title row with the
-        // search box at its right, the summary's lines, the bar of the tick with its key inside, then the tabs and the
-        // Average / Lag spikes switch.
+        // search box at its right, the summary's lines, the bar of the tick with its key inside and the Lag spikes only
+        // switch at its end, then the tabs.
         layoutData = ClientReport.base();
         layoutSpikes = ClientReport.spikesShown();
         layoutFrames = ClientReport.framesShown();
@@ -114,7 +117,7 @@ public final class CulpritScreen extends Screen {
         ReportData d = ClientReport.view();
         summaryLines = Math.clamp(this.font.split(layoutChunks ? chunksHeadline() : headline(layoutData, d), inner).size(), 1, 3);
         barY = top + 20 + summaryLines * 10 + 2;
-        int tabsY = barY + BAR_H + 5;
+        int tabsY = barY + VIEW_H + 5;
         listTop = tabsY + 21;
         listBottom = bottom - 28;
         tabButtons.clear();
@@ -123,22 +126,27 @@ public final class CulpritScreen extends Screen {
             listTop = top + 20 + summaryLines * 10 + 6;
             panel.layout(left + 8, listTop + 2, right - 12, listBottom);
         }
-        int viewW = Math.max(this.font.width(viewLabel(false)), this.font.width(viewLabel(true))) + 12;
-        int tabW = Math.min(58, (inner - viewW - 4 * (TABS.length + 1)) / TABS.length);
+        int tabW = Math.min(58, (inner - 4 * (TABS.length - 1)) / TABS.length);
         int x = left + 8;
         for (int i = 0; i < TABS.length && !layoutChunks; i++) {
             int index = i;
             tabButtons.add(addRenderableWidget(Button.builder(tabLabel(i), button -> showTab(index)).bounds(x, tabsY, tabW, 16).build()));
             x += tabW + 4;
         }
-        Button viewSwitch = addRenderableWidget(Button.builder(viewLabel(layoutSpikes), b -> {
-            ClientReport.showSpikes(!ClientReport.spikesShown());
-            scroll = 0;
-            picked = -1;
-        }).bounds(x, tabsY, viewW, 16).tooltip(Tooltip.create(layoutFrames
-                ? tr("view.about_frames", "Average: every frame of the scan. Stutters: only the frames that took over twice the usual frame (and at least 20 ms), to find what makes them slow.")
-                : tr("view.about", "Average: every tick of the scan. Lag spikes: only the ticks that took over twice the usual tick (and at least 5 ms), to find what makes them slow."))).build());
-        viewSwitch.visible = !layoutChunks;
+        // Every tick or only the lag spikes (frames: the stutters): a tick box at the bar's end, apart from the tabs, as it
+        // changes what the headline, the bar and every tab cover.
+        Component viewText = viewLabel(layoutData);
+        int viewW = Checkbox.getBoxSize(this.font) + 4 + this.font.width(viewText);
+        barW = layoutChunks ? inner : inner - viewW - 10;
+        Checkbox viewSwitch = addRenderableWidget(Checkbox.builder(viewText, this.font).pos(right - 8 - viewW, barY).selected(layoutSpikes)
+                .tooltip(Tooltip.create(layoutFrames ? tr("view.about_frames2", "Ticked: only the stutters, the frames that took over twice the usual frame (and at least 20 ms), to find what makes them slow. Not ticked: every frame of the scan, on average.")
+                        : tr("view.about2", "Ticked: only the lag spikes, the ticks that took over twice the usual tick (and at least 5 ms), to find what makes them slow. Not ticked: every tick of the scan, on average.")))
+                .onValueChange((box, on) -> {
+                    ClientReport.showSpikes(on);
+                    scroll = 0;
+                    picked = -1;
+                }).build());
+        viewSwitch.visible = !layoutChunks && layoutData != null;
         // Server ticks / Frames / Loaded chunks, after the title.
         int sx = left + 8 + this.font.width(this.title.copy().withStyle(ChatFormatting.BOLD)) + 8;
         for (int s = 0; s < 3; s++) {
@@ -156,8 +164,24 @@ public final class CulpritScreen extends Screen {
             sx += w + 3;
         }
         sectionRight = sx;
+        // Settings in the title row's corner, the search box before it (giving way on a narrow window), so the sections
+        // and the settings are not taken for one row of choices.
+        Component settingsText = tr("settings", "Settings");
+        int settingsW = this.font.width(settingsText) + 10;
+        int settingsX = right - 8 - settingsW;
         int searchW = Math.clamp(inner / 4, 80, 160);
-        searchLeft = right - 8 - searchW;
+        searchLeft = settingsX - 6 - searchW;
+        if (searchLeft < sectionRight + 4) {
+            searchW = Math.max(56, searchW - (sectionRight + 4 - searchLeft));
+            searchLeft = settingsX - 6 - searchW;
+        }
+        addRenderableWidget(Button.builder(settingsText, b -> {
+            Screen settings = settings(this);
+            if (settings != null) {
+                Minecraft.getInstance().gui.setScreen(settings);
+            }
+        }).bounds(settingsX, top + 3, settingsW, 14).tooltip(Tooltip.create(tr("settings.about",
+                "How the results show on the world, and the HUD line."))).build());
         search = addRenderableWidget(new EditBox(this.font, searchLeft, top + 3, searchW, 14, tr("search", "Search")));
         search.setHint(tr("search.hint", "Search").withStyle(ChatFormatting.DARK_GRAY));
         search.setMaxLength(64);
@@ -318,7 +342,7 @@ public final class CulpritScreen extends Screen {
         if (d == null) {
             return;                                            // the lag spikes' view of a scan that had none: the headline says so
         }
-        bar(g, d, left + 8, barY, inner, mouseX, mouseY);
+        bar(g, d, left + 8, barY + (VIEW_H - BAR_H) / 2, barW, mouseX, mouseY);
         rows(g, d, mouseX, mouseY);
     }
 
@@ -399,11 +423,19 @@ public final class CulpritScreen extends Screen {
                 ReportText.time(d.tickNsMax));
     }
 
-    private static Component viewLabel(boolean spikes) {
-        if (ClientReport.framesShown()) {
-            return spikes ? tr("view.stutters", "Stutters").withStyle(ChatFormatting.GOLD) : tr("view.average", "Average");
-        }
-        return spikes ? tr("view.spikes", "Lag spikes").withStyle(ChatFormatting.GOLD) : tr("view.average", "Average");
+    /** The switch's words, with how many there were: "Lag spikes only (4)", for frames "Stutters only (2)". */
+    private static Component viewLabel(@Nullable ReportData base) {
+        int count = base != null && base.spikes != null ? base.spikes.ticks : 0;
+        return ClientReport.framesShown() ? tr("view.stutters_only", "Stutters only (%s)", count) : tr("view.spikes_only", "Lag spikes only (%s)", count);
+    }
+
+    /** The player's settings, NeoForge's page for Culprit's client file, back to {@code parent} when done; null if none. */
+    public static @Nullable Screen settings(Screen parent) {
+        return net.neoforged.fml.config.ModConfigs.getModConfigs(dev.culprit.Culprit.MODID).stream()
+                .filter(c -> c.getType() == net.neoforged.fml.config.ModConfig.Type.CLIENT).findFirst()
+                .<Screen>map(c -> new net.neoforged.neoforge.client.gui.ConfigurationScreen.ConfigurationSectionScreen(parent, c.getType(), c,
+                        tr("settings.title", "Culprit: your settings")))
+                .orElse(null);
     }
 
     private static Component sectionLabel(int section) {

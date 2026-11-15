@@ -214,11 +214,8 @@ public final class Lab {
             } else if (v.screenTab() == CHAT) {
                 mc.gui.setScreen(new ChatScreen("", false));
             } else if (v.screenTab() == SETTINGS) {
-                // The player's settings, as Config in the mod list opens them (the client file's page).
-                var config = net.neoforged.fml.config.ModConfigs.getModConfigs(Culprit.MODID).stream()
-                        .filter(c -> c.getType() == net.neoforged.fml.config.ModConfig.Type.CLIENT).findFirst().orElseThrow();
-                mc.gui.setScreen(new net.neoforged.neoforge.client.gui.ConfigurationScreen.ConfigurationSectionScreen(null, config.getType(), config,
-                        net.minecraft.network.chat.Component.literal("Culprit: your settings")));
+                // The player's settings, as the results screen's Settings button opens them.
+                mc.gui.setScreen(CulpritScreen.settings(new CulpritScreen()));
             } else if (mc.gui.screen() != null) {
                 mc.gui.setScreen(null);
             }
