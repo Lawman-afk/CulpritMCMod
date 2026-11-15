@@ -110,7 +110,7 @@ abstract class LevelRendererFrameMixin {
         }
     }
 
-    @WrapOperation(require = 0, method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/chunk/SectionRenderDispatcher;uploadTerrainBuffersToGpu()V"))
+    @WrapOperation(require = 0, method = "prepareChunkRenders", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/chunk/SectionRenderDispatcher;uploadGlobalGeomBuffersToGPU()V"))
     private void culprit$upload(SectionRenderDispatcher dispatcher, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(dispatcher);

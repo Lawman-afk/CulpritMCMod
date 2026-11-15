@@ -32,6 +32,8 @@ DATA_VERSION = 4790
 # Main's files with no place here.
 DROP = [re.compile(p) for p in (
     r"docs/BACKPORT\.md", r"tools/backport/.*",
+    # Main's photographer for the mod page (devworld/Showcase: real-world pictures, taken on main alone).
+    r"src/main/java/dev/culprit/devworld/Showcase\.java",
 )]
 # Main's paths that are this branch's own (build files changed here by hand): never overwritten.
 OWN = {"build.gradle", "gradle.properties"}
@@ -327,6 +329,10 @@ FILE_FIXES: dict[str, list] = {
              '            target = "Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;execute',
              '@WrapOperation(require = 0, method = "renderLevel", at = @At(value = "INVOKE",\n'
              '            target = "Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;execute'),
+        # 26.1.2 uploads the chunk meshes' shared buffers as it lays out the chunks to draw (26.3 in its render). Found
+        # by the release jar's real-client check: an optional hook with no place is silent in players' games.
+        swap('method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/chunk/SectionRenderDispatcher;uploadTerrainBuffersToGpu()V")',
+             'method = "prepareChunkRenders", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/chunk/SectionRenderDispatcher;uploadGlobalGeomBuffersToGPU()V")'),
     ],
     # 26.1.2 gathers the level's render state in the level renderer, and a block entity's without the "global" flag.
     "src/main/java/dev/culprit/mixin/LevelExtractorFrameMixin.java": [
