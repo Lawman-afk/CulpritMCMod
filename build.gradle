@@ -49,9 +49,12 @@ tasks.named('jar', Jar) {
     // The dev aids (the prepared test world, photographers) and the developer's tests (GameTests and their
     // structures) are for the dev runs only, never in a released jar.
     exclude('dev/culprit/devworld/**', 'dev/culprit/gametest/**', 'data/culprit/structures/gametest/**')
+    // So are this branch's own mixins for the test server (dev/culprit/port/mixin, which only the dev runs apply: the
+    // mixin block below names their config for those) and their config.
+    exclude('dev/culprit/port/mixin/**', 'culprit.port.mixins.json')
     // Forge 1.20.1 finds a mod's mixins through the jar's manifest.
     manifest.attributes([
-            'MixinConfigs': "${mod_id}.legacy.mixins.json,${mod_id}.mixins.json,${mod_id}.port.mixins.json"
+            'MixinConfigs': "${mod_id}.legacy.mixins.json,${mod_id}.mixins.json"
     ])
 }
 
