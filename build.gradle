@@ -50,7 +50,7 @@ tasks.named('jar', Jar) {
     exclude('dev/culprit/devworld/**', 'dev/culprit/gametest/**', 'data/culprit/structure/gametest/**')
 }
 
-// Mojang ships Java 25 to players in 26.3, so the mod targets Java 25.
+// Minecraft 1.21.1 runs on Java 21, so this branch targets Java 21.
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 // Every compile error at once while porting (javac stops at 100).
 tasks.withType(JavaCompile).configureEach { options.compilerArgs += ['-Xmaxerrs', '10000'] }
