@@ -30,7 +30,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.FileUtil;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -47,7 +47,7 @@ import net.minecraft.world.level.block.StandingSignBlock;
 import net.minecraft.world.level.block.entity.CommandBlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignText;
-import net.minecraft.world.level.block.entity.SignTextSlot;
+
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.levelgen.FlatLevelSource;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -99,19 +99,19 @@ public final class Lab {
         }
         Minecraft mc = Minecraft.getInstance();
         mc.options.pauseOnLostFocus = false;
-        if (mc.gui.screen() instanceof net.minecraft.client.gui.screens.PauseScreen) {
-            mc.gui.setScreen(null);
+        if (mc.screen instanceof net.minecraft.client.gui.screens.PauseScreen) {
+            mc.setScreen(null);
         }
         if (mc.options.tutorialStep != net.minecraft.client.tutorial.TutorialSteps.NONE) {
             mc.getTutorial().setStep(net.minecraft.client.tutorial.TutorialSteps.NONE);
         }
-        if (mc.level == null && !worldMade && mc.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen) {
+        if (mc.level == null && !worldMade && mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen) {
             worldMade = true;
             try {
                 var settings = new LevelSettings("Culprit Lab", GameType.CREATIVE, LevelSettings.DifficultySettings.DEFAULT, true,
                         WorldDataConfiguration.DEFAULT);
                 mc.createWorldOpenFlows().createFreshLevel(fresh(mc, "culprit_lab"), settings, new WorldOptions(0L, false, false), Lab::flat,
-                        mc.gui.screen());
+                        mc.screen);
             } catch (IOException e) {
                 Culprit.LOGGER.error("Lab: could not make a world", e);
             }
@@ -152,7 +152,8 @@ public final class Lab {
             framesChecked = true;
             StringBuilder never = new StringBuilder();
             for (int p = 0; p < Math.min(dev.culprit.scan.FramePhase.COUNT, frames.phaseNs.length); p++) {
-                if (frames.phaseNs[p] == 0 && (p != dev.culprit.scan.FramePhase.SHADOWS || net.neoforged.fml.ModList.get().isLoaded("iris"))
+                if (frames.phaseNs[p] == 0 && p != dev.culprit.scan.FramePhase.SUBMIT && p != dev.culprit.scan.FramePhase.BATCHING
+                        && (p != dev.culprit.scan.FramePhase.SHADOWS || net.neoforged.fml.ModList.get().isLoaded("iris"))
                         && (p != dev.culprit.scan.FramePhase.FAR_TERRAIN || net.neoforged.fml.ModList.get().isLoaded("distanthorizons"))) {
                     never.append(' ').append(dev.culprit.scan.FramePhase.key(p));
                 }
@@ -166,8 +167,8 @@ public final class Lab {
             saved = true;
             Culprit.LOGGER.info("Lab: report saved: {}", ClientReport.saveReport());
         }
-        if (mc.gui.hud.isHidden() == hudWanted) {
-            mc.gui.hud.toggle();                                   // no hand, hotbar or chat in the pictures, but the chat's
+        if (mc.options.hideGui == hudWanted) {
+            mc.options.hideGui = !mc.options.hideGui;                                   // no hand, hotbar or chat in the pictures, but the chat's
         }
         // Each view: the camera and what is on screen, a wait for the frame to settle, the picture.
         int t = ++shot;
@@ -177,7 +178,7 @@ public final class Lab {
         int step = t / EACH;
         if (step > 1 && step - 2 < views.size()) {
             View v = views.get(step - 2);
-            Screenshot.grab(mc.gameDirectory, "lab_" + v.name() + ".png", mc.gameRenderer.mainRenderTarget(), 1,
+            Screenshot.grab(mc.gameDirectory, "lab_" + v.name() + ".png", mc.getMainRenderTarget(), 1,
                     msg -> Culprit.LOGGER.info("Lab: {}", msg.getString()));
         }
         if (step - 1 < views.size()) {
@@ -200,31 +201,31 @@ public final class Lab {
             }
             if (v.screenTab() >= 0) {
                 CulpritScreen.showTab(v.screenTab());
-                if (!(mc.gui.screen() instanceof CulpritScreen)) {
-                    mc.gui.setScreen(new CulpritScreen());
+                if (!(mc.screen instanceof CulpritScreen)) {
+                    mc.setScreen(new CulpritScreen());
                 }
-                if (mc.gui.screen() instanceof CulpritScreen screen) {
+                if (mc.screen instanceof CulpritScreen screen) {
                     screen.setSearch(v.search());
                 }
             } else if (v.screenTab() == SCAN_MENU) {
-                mc.gui.setScreen(new ScanScreen());
+                mc.setScreen(new ScanScreen());
             } else if (v.screenTab() == SCAN_RUNNING) {
                 ClientPacketDistributor.sendToServer(new CulpritNetwork.ScanRequest(30));     // as the menu's 30 s button does
-                mc.gui.setScreen(new ScanScreen());
+                mc.setScreen(new ScanScreen());
             } else if (v.screenTab() == CHAT) {
-                mc.gui.setScreen(new ChatScreen("", false));
+                mc.setScreen(new ChatScreen("", false));
             } else if (v.screenTab() == SETTINGS) {
                 // The player's settings, as the results screen's Settings button opens them.
-                mc.gui.setScreen(CulpritScreen.settings(new CulpritScreen()));
-            } else if (mc.gui.screen() != null) {
-                mc.gui.setScreen(null);
+                mc.setScreen(CulpritScreen.settings(new CulpritScreen()));
+            } else if (mc.screen != null) {
+                mc.setScreen(null);
             }
             server.execute(() -> server.getPlayerList().getPlayers().getFirst()
                     .teleportTo(server.overworld(), v.at().x, v.at().y, v.at().z, Set.of(), v.yaw(), v.pitch(), true));
             return;
         }
         if (step - 1 == views.size()) {
-            mc.gui.setScreen(null);
+            mc.setScreen(null);
             server.execute(() -> server.getPlayerList().getPlayers().getFirst()
                     .teleportTo(server.overworld(), spawn.x, spawn.y, spawn.z, Set.of(), 180f, 10f, true));
             return;
@@ -293,7 +294,7 @@ public final class Lab {
         // A glass room of villagers (their brains are among the costliest entities).
         box(level, 5, y, 6, 12, y + 3, 13);
         for (int i = 0; i < 24; i++) {
-            var villager = EntityTypes.VILLAGER.create(level, EntitySpawnReason.COMMAND);
+            var villager = EntityType.VILLAGER.create(level, EntitySpawnReason.COMMAND);
             if (villager != null) {
                 villager.snapTo(6.5 + (i % 6), y, 7.5 + (i / 6) * 1.5, 0f, 0f);
                 villager.setPersistenceRequired();
@@ -311,7 +312,7 @@ public final class Lab {
             }
         }
         for (int i = 0; i < 40; i++) {
-            var cow = EntityTypes.COW.create(level, EntitySpawnReason.COMMAND);
+            var cow = EntityType.COW.create(level, EntitySpawnReason.COMMAND);
             if (cow != null) {
                 cow.snapTo(-12.5 + (i % 8) * 1.2, y, -13.5 + (i / 8) * 1.4, i * 37f, 0f);
                 cow.setPersistenceRequired();
@@ -429,11 +430,11 @@ public final class Lab {
     private static void sign(ServerLevel level, BlockPos at, List<String> lines) {
         level.setBlock(at, Blocks.OAK_SIGN.defaultBlockState().setValue(StandingSignBlock.ROTATION, 0), 3);
         if (level.getBlockEntity(at) instanceof SignBlockEntity sign) {
-            SignText.Mutable text = sign.getText(SignTextSlot.FRONT).asMutable();
+            SignText text = sign.getText(true);
             for (int i = 0; i < Math.min(4, lines.size()); i++) {
-                text.setLine(i, Component.literal(lines.get(i)));
+                text = text.setMessage(i, Component.literal(lines.get(i)));
             }
-            sign.setText(text.asImmutable(), SignTextSlot.FRONT);
+            sign.setText(text, true);
             sign.setChanged();
             level.sendBlockUpdated(at, sign.getBlockState(), sign.getBlockState(), 3);
         }
@@ -447,7 +448,7 @@ public final class Lab {
                 .withBiomeAndLayers(List.of(new FlatLayerInfo(1, Blocks.BEDROCK), new FlatLayerInfo(20, Blocks.STONE),
                         new FlatLayerInfo(3, Blocks.DIRT), new FlatLayerInfo(1, Blocks.GRASS_BLOCK)),
                         java.util.Optional.empty(), biomes.getOrThrow(Biomes.PLAINS));
-        return WorldPresets.createTestWorldDimensions(registries).replaceOverworldGenerator(registries, new FlatLevelSource(settings));
+        return WorldPresets.createFlatWorldDimensions(registries).replaceOverworldGenerator(registries, new FlatLevelSource(settings));
     }
 
     /** Deletes the worlds earlier runs left under {@code name} and gives the folder for this run's. */

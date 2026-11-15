@@ -3,7 +3,7 @@ package dev.culprit.gametest;
 import java.util.Arrays;
 
 import dev.culprit.Culprit;
-import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -44,7 +44,7 @@ final class BenchTests {
                 }
             }
             for (int i = 0; i < 200; i++) {
-                helper.spawn(EntityTypes.PIG, 0.5f + (i % 16), 8f, 0.5f + (i / 16));
+                helper.spawn(EntityType.PIG, 0.5f + (i % 16), 8f, 0.5f + (i / 16));
             }
             helper.runAfterDelay(WARMUP, () -> measured = 0);
             helper.runAfterDelay(WARMUP + MEASURE + 5, () -> {

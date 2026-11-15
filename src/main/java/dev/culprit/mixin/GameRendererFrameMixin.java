@@ -10,7 +10,7 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.render.GuiRenderer;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.extract.LevelExtractor;
+import net.minecraft.client.renderer.LevelRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
@@ -21,8 +21,8 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(GameRenderer.class)
 abstract class GameRendererFrameMixin {
     @WrapOperation(require = 0, method = "extract(Lnet/minecraft/client/DeltaTracker;Z)V", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/extract/LevelExtractor;extract(Lnet/minecraft/client/DeltaTracker;Lnet/minecraft/client/Camera;F)V"))
-    private void culprit$extractLevel(LevelExtractor extractor, DeltaTracker delta, Camera camera, float partial, Operation<Void> original) {
+            target = "Lnet/minecraft/client/renderer/LevelRenderer;extractLevel(Lnet/minecraft/client/DeltaTracker;Lnet/minecraft/client/Camera;F)V"))
+    private void culprit$extractLevel(LevelRenderer extractor, DeltaTracker delta, Camera camera, float partial, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(extractor, delta, camera, partial);
             return;
@@ -36,8 +36,8 @@ abstract class GameRendererFrameMixin {
     }
 
     @WrapOperation(require = 0, method = "extract(Lnet/minecraft/client/DeltaTracker;Z)V", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/gui/Gui;extractRenderState(Lnet/minecraft/client/DeltaTracker;ZZ)V"))
-    private void culprit$extractGui(Gui gui, DeltaTracker delta, boolean level, boolean loaded, Operation<Void> original) {
+            target = "Lnet/minecraft/client/renderer/GameRenderer;extractGui(Lnet/minecraft/client/DeltaTracker;ZZ)V"))
+    private void culprit$extractGui(GameRenderer gui, DeltaTracker delta, boolean level, boolean loaded, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(gui, delta, level, loaded);
             return;
@@ -50,15 +50,16 @@ abstract class GameRendererFrameMixin {
         }
     }
 
-    @WrapOperation(require = 0, method = "render()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/render/GuiRenderer;render()V"))
-    private void culprit$renderGui(GuiRenderer renderer, Operation<Void> original) {
+    @WrapOperation(require = 0, method = "render(Lnet/minecraft/client/DeltaTracker;Z)V", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/render/GuiRenderer;render(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V"))
+    private void culprit$renderGui(GuiRenderer renderer, com.mojang.blaze3d.buffers.GpuBufferSlice fog, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
-            original.call(renderer);
+            original.call(renderer, fog);
             return;
         }
         long start = FrameProbe.begin();
         try {
-            original.call(renderer);
+            original.call(renderer, fog);
         } finally {
             FrameProbe.phase(FramePhase.GUI, FrameProbe.end(start));
         }

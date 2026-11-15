@@ -22,17 +22,17 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(targets = "net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer", remap = false)
 abstract class SodiumFrameMixin {
     @WrapOperation(require = 0, method = "extractBlockEntity", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/blockentity/BlockEntityRenderDispatcher;tryExtractRenderState(Lnet/minecraft/world/level/block/entity/BlockEntity;FLnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;Z)Lnet/minecraft/client/renderer/blockentity/state/BlockEntityRenderState;"))
+            target = "Lnet/minecraft/client/renderer/blockentity/BlockEntityRenderDispatcher;tryExtractRenderState(Lnet/minecraft/world/level/block/entity/BlockEntity;FLnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)Lnet/minecraft/client/renderer/blockentity/state/BlockEntityRenderState;"))
     private BlockEntityRenderState culprit$blockEntity(BlockEntityRenderDispatcher dispatcher, BlockEntity blockEntity, float partial,
-                                                       ModelFeatureRenderer.CrumblingOverlay breaking, boolean global,
+                                                       ModelFeatureRenderer.CrumblingOverlay breaking,
                                                        Operation<BlockEntityRenderState> original) {
         if (!FrameProbe.measuring()) {
-            return original.call(dispatcher, blockEntity, partial, breaking, global);
+            return original.call(dispatcher, blockEntity, partial, breaking);
         }
         long start = FrameProbe.begin();
         BlockEntityRenderState state = null;
         try {
-            state = original.call(dispatcher, blockEntity, partial, breaking, global);
+            state = original.call(dispatcher, blockEntity, partial, breaking);
             return state;
         } finally {
             long ns = FrameProbe.end(start);

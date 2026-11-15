@@ -196,7 +196,7 @@ public final class ClientReport {
                         (ticks + 19) / 20).withStyle(ChatFormatting.GRAY)));
             }
             case CulpritNetwork.Status.DENIED -> {
-                if (Minecraft.getInstance().gui.screen() == null) {
+                if (Minecraft.getInstance().screen == null) {
                     say(tag().append(Component.translatableWithFallback("culprit.chat.denied", "Only operators can scan this server.")
                             .withStyle(ChatFormatting.RED)));
                 }

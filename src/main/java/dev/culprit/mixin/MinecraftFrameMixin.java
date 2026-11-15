@@ -3,8 +3,8 @@ package dev.culprit.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mojang.renderpearl.api.commands.CommandEncoder;
-import com.mojang.renderpearl.api.device.GpuSurface;
+
+
 
 import dev.culprit.scan.FrameProbe;
 import dev.culprit.scan.FramePhase;
@@ -82,20 +82,6 @@ abstract class MinecraftFrameMixin {
         }
     }
 
-    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/commands/CommandEncoder;submit()V"))
-    private void culprit$submitToGpu(CommandEncoder encoder, Operation<Void> original) {
-        if (!FrameProbe.measuring()) {
-            original.call(encoder);
-            return;
-        }
-        long start = FrameProbe.begin();
-        try {
-            original.call(encoder);
-        } finally {
-            FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
-        }
-    }
-
     /**
      * The drawing half of the frame: what of it no other part times is the wait for the GPU and the screen (wherever the
      * driver puts it: fetching the next image, copying into it, showing it, or the first use of a buffer still in use)
@@ -115,45 +101,30 @@ abstract class MinecraftFrameMixin {
         }
     }
 
-    // Where the wait for the screen falls (fetching the next image, copying into it, showing it) is the driver's choice.
-    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuSurface;acquireNextTexture()V"))
-    private void culprit$acquire(GpuSurface surface, Operation<Void> original) {
+    // 26.1.2 copies the frame to the window and swaps the window's buffers: where the wait for the screen falls.
+    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/pipeline/RenderTarget;blitToScreen()V"))
+    private void culprit$blitToScreen(com.mojang.blaze3d.pipeline.RenderTarget target, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
-            original.call(surface);
+            original.call(target);
             return;
         }
         long start = FrameProbe.begin();
         try {
-            original.call(surface);
+            original.call(target);
         } finally {
             FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
         }
     }
 
-    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE",
-            target = "Lcom/mojang/renderpearl/api/device/GpuSurface;blitFromTexture(Lcom/mojang/renderpearl/api/commands/CommandEncoder;Lcom/mojang/renderpearl/api/textures/GpuTextureView;)V"))
-    private void culprit$blit(GpuSurface surface, CommandEncoder encoder, com.mojang.renderpearl.api.textures.GpuTextureView view, Operation<Void> original) {
+    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;flipFrame(Lcom/mojang/blaze3d/TracyFrameCapture;)V"))
+    private void culprit$flipFrame(com.mojang.blaze3d.TracyFrameCapture capture, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
-            original.call(surface, encoder, view);
+            original.call(capture);
             return;
         }
         long start = FrameProbe.begin();
         try {
-            original.call(surface, encoder, view);
-        } finally {
-            FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
-        }
-    }
-
-    @WrapOperation(require = 0, method = "renderFrame(Z)V", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/device/GpuSurface;present()V"))
-    private void culprit$present(GpuSurface surface, Operation<Void> original) {
-        if (!FrameProbe.measuring()) {
-            original.call(surface);
-            return;
-        }
-        long start = FrameProbe.begin();
-        try {
-            original.call(surface);
+            original.call(capture);
         } finally {
             FrameProbe.phase(FramePhase.PRESENT, FrameProbe.end(start));
         }

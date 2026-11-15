@@ -12,7 +12,7 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
-import net.minecraft.client.renderer.extract.LevelExtractor;
+import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.state.level.ParticlesRenderState;
 import net.minecraft.world.entity.Entity;
@@ -24,7 +24,7 @@ import org.spongepowered.asm.mixin.injection.At;
  * The first step of drawing the world, timed during a frame scan: each entity's and block entity's render state made
  * (charged to it, and the state remembered so its drawing is charged to it too), and the particles'.
  */
-@Mixin(LevelExtractor.class)
+@Mixin(LevelRenderer.class)
 abstract class LevelExtractorFrameMixin {
     @WrapMethod(require = 0, method = "extractEntity(Lnet/minecraft/world/entity/Entity;F)Lnet/minecraft/client/renderer/entity/state/EntityRenderState;")
     private EntityRenderState culprit$entity(Entity entity, float partial, Operation<EntityRenderState> original) {
@@ -42,18 +42,18 @@ abstract class LevelExtractorFrameMixin {
         }
     }
 
-    @WrapOperation(require = 0, method = "extractVisibleBlockEntities", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/blockentity/BlockEntityRenderDispatcher;tryExtractRenderState(Lnet/minecraft/world/level/block/entity/BlockEntity;FLnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;ZLnet/minecraft/client/renderer/culling/Frustum;)Lnet/minecraft/client/renderer/blockentity/state/BlockEntityRenderState;"))
+    @WrapOperation(require = 0, method = "extractVisibleBlockEntities(Lnet/minecraft/client/Camera;FLnet/minecraft/client/renderer/state/level/LevelRenderState;Lnet/minecraft/client/renderer/culling/Frustum;)V", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/blockentity/BlockEntityRenderDispatcher;tryExtractRenderState(Lnet/minecraft/world/level/block/entity/BlockEntity;FLnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;Lnet/minecraft/client/renderer/culling/Frustum;)Lnet/minecraft/client/renderer/blockentity/state/BlockEntityRenderState;"))
     private BlockEntityRenderState culprit$blockEntity(BlockEntityRenderDispatcher dispatcher, BlockEntity blockEntity, float partial,
-                                                       ModelFeatureRenderer.CrumblingOverlay breaking, boolean global, Frustum frustum,
+                                                       ModelFeatureRenderer.CrumblingOverlay breaking, Frustum frustum,
                                                        Operation<BlockEntityRenderState> original) {
         if (!FrameProbe.measuring()) {
-            return original.call(dispatcher, blockEntity, partial, breaking, global, frustum);
+            return original.call(dispatcher, blockEntity, partial, breaking, frustum);
         }
         long start = FrameProbe.begin();
         BlockEntityRenderState state = null;
         try {
-            state = original.call(dispatcher, blockEntity, partial, breaking, global, frustum);
+            state = original.call(dispatcher, blockEntity, partial, breaking, frustum);
             return state;
         } finally {
             long ns = FrameProbe.end(start);
@@ -66,7 +66,7 @@ abstract class LevelExtractorFrameMixin {
         }
     }
 
-    @WrapOperation(require = 0, method = "extract", at = @At(value = "INVOKE",
+    @WrapOperation(require = 0, method = "extractLevel", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/particle/ParticleEngine;extract(Lnet/minecraft/client/renderer/state/level/ParticlesRenderState;Lnet/minecraft/client/renderer/culling/Frustum;Lnet/minecraft/client/Camera;F)V"))
     private void culprit$particles(ParticleEngine engine, ParticlesRenderState state, Frustum frustum, Camera camera, float partial,
                                    Operation<Void> original) {

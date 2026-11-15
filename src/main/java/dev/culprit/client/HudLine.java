@@ -69,7 +69,7 @@ public final class HudLine {
 
     public static void draw(GuiGraphicsExtractor g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
-        if (!CulpritClientConfig.hudLine() || mc.level == null || mc.gui.hud.isHidden() || mc.getDebugOverlay().showDebugScreen()) {
+        if (!CulpritClientConfig.hudLine() || mc.level == null || mc.options.hideGui || mc.getDebugOverlay().showDebugScreen()) {
             return;
         }
         Font font = mc.font;

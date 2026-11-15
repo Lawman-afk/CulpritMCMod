@@ -15,7 +15,7 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.renderpearl.api.commands.RenderPass;
+
 
 import dev.culprit.command.ReportText;
 import dev.culprit.net.ReportData;
@@ -199,8 +199,8 @@ public final class Overlay {
         if (boxes == 0 && tiles == 0 && !beam) {
             return;
         }
-        STORAGE.order(0).afterTerrain.submit(new CustomFeatureRenderer.Submit(IDENTITY.last(), RenderTypes.debugQuads(), FILLS));
-        STORAGE.order(0).afterTerrain.submit(new CustomFeatureRenderer.Submit(IDENTITY.last(), RenderTypes.linesTranslucent(), LINES));
+        STORAGE.order(0).submitCustomGeometry(IDENTITY, RenderTypes.debugQuads(), FILLS);
+        STORAGE.order(0).submitCustomGeometry(IDENTITY, RenderTypes.linesTranslucent(), LINES);
         labels(r, dim, mc, cam, camera.orientation);
         render(mc, event);
     }
@@ -348,8 +348,8 @@ public final class Overlay {
         if (tiles == 0) {
             return;
         }
-        STORAGE.order(0).afterTerrain.submit(new CustomFeatureRenderer.Submit(IDENTITY.last(), RenderTypes.debugQuads(), FILLS));
-        STORAGE.order(0).afterTerrain.submit(new CustomFeatureRenderer.Submit(IDENTITY.last(), RenderTypes.linesTranslucent(), LINES));
+        STORAGE.order(0).submitCustomGeometry(IDENTITY, RenderTypes.debugQuads(), FILLS);
+        STORAGE.order(0).submitCustomGeometry(IDENTITY, RenderTypes.linesTranslucent(), LINES);
         // The loaders that are not players, named over their chunk.
         Font font = mc.font;
         Quaternionf facing = camera.orientation;
@@ -652,7 +652,7 @@ public final class Overlay {
     public static void drawReadout(GuiGraphicsExtractor g, DeltaTracker delta) {
         ReportData r = report;
         Minecraft mc = Minecraft.getInstance();
-        if (!shown || r == null || mc.gui.hud.isHidden() || mc.gui.screen() != null || lookThing < 0 || lookThing >= r.things) {
+        if (!shown || r == null || mc.options.hideGui || mc.screen != null || lookThing < 0 || lookThing >= r.things) {
             return;
         }
         long key = lookThing;
@@ -697,24 +697,20 @@ public final class Overlay {
                         .withColor(0xC8C8C8)).getVisualOrderText();
     }
 
-    /** Draws what was submitted into the finished picture (Ground Burst's way, DESIGN §6). */
+    /** Draws what was submitted into the finished picture (Ground Burst's way, DESIGN §6); 26.1.2's features go into the
+     * game's buffers, drawn as the batch ends. */
     private static void render(Minecraft mc, RenderLevelStageEvent.AfterLevel event) {
+        var buffers = mc.renderBuffers();
         if (dispatcher == null) {
-            dispatcher = new FeatureRenderDispatcher(mc.gameRenderer.renderBuffers(), mc.getModelManager(), mc.getAtlasManager(), mc.font,
-                    mc.gameRenderer.gameRenderState());
+            dispatcher = new FeatureRenderDispatcher(STORAGE, mc.getModelManager(), buffers.bufferSource(), mc.getAtlasManager(),
+                    buffers.outlineBufferSource(), buffers.crumblingBufferSource(), mc.font, mc.gameRenderer.getGameRenderState());
         }
         Matrix4fStack modelView = RenderSystem.getModelViewStack();
         modelView.pushMatrix();
         modelView.mul(event.getModelViewMatrix());
-        try (FeatureRenderDispatcher.PreparedFrame frame = dispatcher.prepareFrame(STORAGE)) {
-            if (!frame.isEmpty()) {
-                RenderTarget main = mc.gameRenderer.mainRenderTarget();
-                try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Culprit overlay",
-                        main.getColorTextureView(), Optional.empty(), main.getDepthTextureView(), OptionalDouble.empty())) {
-                    RenderSystem.bindDefaultUniforms(pass);
-                    FeatureRenderDispatcher.renderAllFeatures(pass, frame);
-                }
-            }
+        try {
+            dispatcher.renderAllFeatures();
+            buffers.bufferSource().endBatch();
         } finally {
             modelView.popMatrix();
         }

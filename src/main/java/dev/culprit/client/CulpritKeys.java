@@ -19,12 +19,12 @@ import net.neoforged.neoforge.common.NeoForge;
  */
 public final class CulpritKeys {
     public static final KeyMapping.Category CATEGORY = new KeyMapping.Category(Culprit.id("culprit"));
-    public static final KeyMapping SCAN = new KeyMapping("key.culprit.scan", KeyConflictContext.IN_GAME, InputConstants.Type.KEYBOARD,
+    public static final KeyMapping SCAN = new KeyMapping("key.culprit.scan", KeyConflictContext.IN_GAME, InputConstants.Type.KEYSYM,
             InputConstants.KEY_F8, CATEGORY);
-    public static final KeyMapping RESULTS = new KeyMapping("key.culprit.results", KeyConflictContext.IN_GAME, InputConstants.Type.KEYBOARD,
+    public static final KeyMapping RESULTS = new KeyMapping("key.culprit.results", KeyConflictContext.IN_GAME, InputConstants.Type.KEYSYM,
             InputConstants.KEY_F9, CATEGORY);
     /** The HUD line on or off: no key at first (the setting does it too). */
-    public static final KeyMapping HUD = new KeyMapping("key.culprit.hud", KeyConflictContext.IN_GAME, InputConstants.Type.KEYBOARD,
+    public static final KeyMapping HUD = new KeyMapping("key.culprit.hud", KeyConflictContext.IN_GAME, InputConstants.Type.KEYSYM,
             InputConstants.UNKNOWN.getValue(), CATEGORY);
 
     private CulpritKeys() {}
@@ -39,16 +39,16 @@ public final class CulpritKeys {
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post e) -> {
             Minecraft mc = Minecraft.getInstance();
             while (SCAN.consumeClick()) {
-                if (mc.gui.screen() == null && mc.player != null) {
-                    mc.gui.setScreen(new ScanScreen());
+                if (mc.screen == null && mc.player != null) {
+                    mc.setScreen(new ScanScreen());
                 }
             }
             while (HUD.consumeClick()) {
                 HudLine.toggle();
             }
             while (RESULTS.consumeClick()) {
-                if (mc.gui.screen() == null && mc.player != null) {
-                    mc.gui.setScreen(new CulpritScreen());
+                if (mc.screen == null && mc.player != null) {
+                    mc.setScreen(new CulpritScreen());
                 }
             }
         });

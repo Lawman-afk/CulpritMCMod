@@ -24,7 +24,7 @@ public class Culprit {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public Culprit(IEventBus modBus, ModContainer modContainer) {
-        modContainer.registerConfig(ModConfig.Type.SYNCED, dev.culprit.config.CulpritServerConfig.SPEC);
+        modContainer.registerConfig(ModConfig.Type.SERVER, dev.culprit.config.CulpritServerConfig.SPEC);
         TickScan.register();
         CulpritCommand.register();
         CulpritNetwork.register(modBus);

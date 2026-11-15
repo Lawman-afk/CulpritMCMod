@@ -78,7 +78,7 @@ public final class GameTestRegistration {
             }
             // One environment per batch: the runner runs each environment's tests as a batch, one batch after another.
             Holder<TestEnvironmentDefinition<?>> environment = environments.computeIfAbsent(spec.batch(), b -> event.registerEnvironment(Culprit.id(b)));
-            TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(environment, Level.OVERWORLD, spec.structure(), spec.maxTicks(), 0,
+            TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(environment, spec.structure(), spec.maxTicks(), 0,
                     true, Rotation.NONE, false, 1, 1, spec.sky(), 0);
             ResourceKey<Consumer<GameTestHelper>> function = ResourceKey.create(Registries.TEST_FUNCTION, Culprit.id(spec.name()));
             event.registerTest(Culprit.id(spec.name()), new FunctionGameTestInstance(function, data));

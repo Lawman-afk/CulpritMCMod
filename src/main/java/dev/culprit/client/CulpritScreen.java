@@ -92,7 +92,7 @@ public final class CulpritScreen extends Screen {
     /** Which list the screen shows next (and now, if it is open). */
     public static void showTab(int index) {
         tab = Math.clamp(index, 0, TABS.length - 1);
-        if (Minecraft.getInstance().gui.screen() instanceof CulpritScreen open) {
+        if (Minecraft.getInstance().screen instanceof CulpritScreen open) {
             open.scroll = 0;
             open.picked = -1;
             open.refreshTabs();
@@ -178,7 +178,7 @@ public final class CulpritScreen extends Screen {
         addRenderableWidget(Button.builder(settingsText, b -> {
             Screen settings = settings(this);
             if (settings != null) {
-                Minecraft.getInstance().gui.setScreen(settings);
+                Minecraft.getInstance().setScreen(settings);
             }
         }).bounds(settingsX, top + 3, settingsW, 14).tooltip(Tooltip.create(tr("settings.about",
                 "How the results show on the world, and the HUD line."))).build());
@@ -225,7 +225,7 @@ public final class CulpritScreen extends Screen {
                 if (ClientReport.chunksShown()) {
                     ClientReport.requestChunks();
                 } else {
-                    Minecraft.getInstance().gui.setScreen(new ScanScreen());
+                    Minecraft.getInstance().setScreen(new ScanScreen());
                 }
             }
             case 1 -> {

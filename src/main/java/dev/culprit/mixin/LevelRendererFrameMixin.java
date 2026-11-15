@@ -31,19 +31,6 @@ import org.spongepowered.asm.mixin.injection.At;
  */
 @Mixin(LevelRenderer.class)
 abstract class LevelRendererFrameMixin {
-    @WrapMethod(require = 0, method = "submitFeatures")
-    private void culprit$submit(LevelRenderState state, SubmitNodeCollector collector, boolean outline, Operation<Void> original) {
-        if (!FrameProbe.measuring()) {
-            original.call(state, collector, outline);
-            return;
-        }
-        long start = FrameProbe.begin();
-        try {
-            original.call(state, collector, outline);
-        } finally {
-            FrameProbe.phase(FramePhase.SUBMIT, FrameProbe.end(start));
-        }
-    }
 
     @WrapOperation(require = 0, method = "submitEntities", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/entity/EntityRenderDispatcher;submit(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;Lnet/minecraft/client/renderer/state/level/CameraRenderState;DDDLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;)V"))
@@ -79,9 +66,9 @@ abstract class LevelRendererFrameMixin {
         }
     }
 
-    @WrapOperation(require = 0, method = "submitFeatures", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/state/level/ParticlesRenderState;submit(Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V"))
-    private void culprit$particles(ParticlesRenderState state, SubmitNodeCollector collector, CameraRenderState camera, Operation<Void> original) {
+    @WrapOperation(require = 0, method = "lambda$addMainPass$0", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/state/level/ParticlesRenderState;submit(Lnet/minecraft/client/renderer/SubmitNodeStorage;Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V"))
+    private void culprit$particles(ParticlesRenderState state, SubmitNodeStorage collector, CameraRenderState camera, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(state, collector, camera);
             return;
@@ -94,22 +81,7 @@ abstract class LevelRendererFrameMixin {
         }
     }
 
-    @WrapOperation(require = 0, method = "render", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;prepareFrame(Lnet/minecraft/client/renderer/SubmitNodeStorage;)Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;"))
-    private FeatureRenderDispatcher.PreparedFrame culprit$sort(FeatureRenderDispatcher dispatcher, SubmitNodeStorage storage,
-                                                               Operation<FeatureRenderDispatcher.PreparedFrame> original) {
-        if (!FrameProbe.measuring()) {
-            return original.call(dispatcher, storage);
-        }
-        long start = FrameProbe.begin();
-        try {
-            return original.call(dispatcher, storage);
-        } finally {
-            FrameProbe.phase(FramePhase.BATCHING, FrameProbe.end(start));
-        }
-    }
-
-    @WrapOperation(require = 0, method = "render", at = @At(value = "INVOKE",
+    @WrapOperation(require = 0, method = "renderLevel", at = @At(value = "INVOKE",
             target = "Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;execute(Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder$Inspector;)V"))
     private void culprit$draw(FrameGraphBuilder frame, GraphicsResourceAllocator allocator, FrameGraphBuilder.Inspector inspector, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
@@ -124,8 +96,8 @@ abstract class LevelRendererFrameMixin {
         }
     }
 
-    @WrapMethod(require = 0, method = "compileSections")
-    private void culprit$chunks(CameraRenderState camera, Operation<Void> original) {
+    @WrapMethod(require = 0, method = "compileSections(Lnet/minecraft/client/Camera;)V")
+    private void culprit$chunks(net.minecraft.client.Camera camera, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(camera);
             return;

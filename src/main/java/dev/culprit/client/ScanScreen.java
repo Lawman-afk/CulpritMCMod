@@ -65,7 +65,7 @@ public final class ScanScreen extends Screen {
         }
         stopFrames = addRenderableWidget(Button.builder(tr("stop_short", "Stop"), b -> FrameScan.stop()).bounds(x, top() + 128, W - 24 - (x - x0), 20).build());
         addRenderableWidget(Button.builder(Component.translatableWithFallback("culprit.scan.results", "Results (%s)",
-                CulpritKeys.RESULTS.getTranslatedKeyMessage()), b -> Minecraft.getInstance().gui.setScreen(new CulpritScreen()))
+                CulpritKeys.RESULTS.getTranslatedKeyMessage()), b -> Minecraft.getInstance().setScreen(new CulpritScreen()))
                 .bounds(x0, top() + H - 28, 140, 20).build());
         addRenderableWidget(Button.builder(Component.translatableWithFallback("culprit.screen.done", "Done"), b -> onClose())
                 .bounds(left() + W - 72, top() + H - 28, 60, 20).build());

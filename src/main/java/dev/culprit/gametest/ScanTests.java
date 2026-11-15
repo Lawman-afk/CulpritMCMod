@@ -25,7 +25,7 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.entity.vehicle.minecart.Minecart;
 import net.minecraft.world.level.ChunkPos;
@@ -59,7 +59,7 @@ final class ScanTests {
             helper.setBlock(new BlockPos(3, 1, 8), Blocks.OBSERVER.defaultBlockState().setValue(ObserverBlock.FACING, Direction.EAST));
             helper.setBlock(new BlockPos(4, 1, 8), Blocks.OBSERVER.defaultBlockState().setValue(ObserverBlock.FACING, Direction.WEST));
             for (int i = 0; i < 12; i++) {
-                helper.spawn(EntityTypes.PIG, 2 + (i % 6) * 2, 1, 11 + (i / 6) * 2);
+                helper.spawn(EntityType.PIG, 2 + (i % 6) * 2, 1, 11 + (i / 6) * 2);
             }
             // The report arrives at the end of a server tick; the checks run in the test's own time, where a failed
             // check fails the test.
@@ -145,8 +145,8 @@ final class ScanTests {
         // A pig riding a minecart: the minecart is ticked from the level's loop, the pig inside the minecart's tick;
         // each must be in the report as its own thing, every tick.
         CulpritGameTests.testAlone("scan_charges_passengers_apart", CulpritGameTests.FLOOR_16, 300, helper -> {
-            Minecart cart = helper.spawn(EntityTypes.MINECART, 7, 1, 7);
-            Pig pig = helper.spawn(EntityTypes.PIG, 7, 1, 7);
+            Minecart cart = helper.spawn(EntityType.MINECART, 7, 1, 7);
+            Pig pig = helper.spawn(EntityType.PIG, 7, 1, 7);
             helper.assertTrue(pig.startRiding(cart, true, false), "the pig gets into the minecart");
             helper.runAfterDelay(5, () -> whenNoScan(helper, () -> helper.assertTrue(TickScan.start(20, report -> helper.runAfterDelay(1, () -> {
                 helper.assertTrue(pig.getVehicle() == cart, "the pig is still riding");

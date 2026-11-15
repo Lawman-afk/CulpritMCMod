@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.Mixin;
 /** A particle moved (its tick), timed during a frame scan and charged to its kind in its chunk. */
 @Mixin(ParticleGroup.class)
 abstract class ParticleFrameMixin {
-    @WrapMethod(require = 0, method = "tickParticle")
+    @WrapMethod(require = 0, method = "tickParticle(Lnet/minecraft/client/particle/Particle;)V")
     private void culprit$tick(Particle particle, Operation<Void> original) {
         if (!FrameProbe.measuring()) {
             original.call(particle);
